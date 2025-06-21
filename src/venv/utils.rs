@@ -26,6 +26,6 @@ pub fn get_dist_info_packages(site_packages: PathBuf) -> Result<Vec<PathBuf>> {
 }
 
 // TODO: implement this function
-fn get_package_size(package_dir: PathBuf) -> f32 {
-    todo!()
-}
+// fn get_package_size(_package_dir: PathBuf) -> f32 {
+//     todo!()
+// }

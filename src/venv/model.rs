@@ -1,7 +1,6 @@
 use std::{collections::HashMap, fs, path::Path};
 
-use anyhow::{Context, Result, anyhow};
-use color_eyre::owo_colors::OwoColorize;
+use anyhow::{Result, anyhow};
 use ratatui::widgets::ListState;
 
 use crate::venv::parser::parse_from_dir;

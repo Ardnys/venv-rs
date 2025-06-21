@@ -1,9 +1,5 @@
-use std::path::Path;
-
-use anyhow::Result;
 use clap::Parser;
 use commands::Cli;
-use venv::Venv;
 
 use crate::app::App;
 
@@ -45,28 +41,3 @@ fn main() -> color_eyre::Result<()> {
 *
 * then we have flags like show size etc. but you should just use the config file
 */
-
-// fn main() -> Result<()> {
-//     // let _pytorch_venv = shellexpand::tilde("~/.virtualenvs/ptvision/");
-//     // let _pytorch_venv_path = Path::new(pytorch_venv.as_ref());
-//
-//     let expanded_venvs = shellexpand::tilde("~/.virtualenvs/");
-//     let venvs_path = Path::new(expanded_venvs.as_ref());
-//
-//     let venvs = Venv::from_venvs_dir(venvs_path)?;
-//     for venv in venvs.iter() {
-//         println!("{}", venv.name);
-//         println!("{} packages", venv.packages.len());
-//         println!("------------");
-//         for (i, package) in venv.packages.iter().take(5).enumerate() {
-//             println!(
-//                 "  {}. {} - version: {}",
-//                 i + 1,
-//                 package.name,
-//                 package.version
-//             );
-//         }
-//         println!();
-//     }
-//     Ok(())
-// }

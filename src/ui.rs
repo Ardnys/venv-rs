@@ -1,15 +1,15 @@
 use ratatui::{
     buffer::Buffer,
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{
         Color, Modifier, Style, Stylize,
-        palette::tailwind::{BLUE, GREEN, SLATE},
+        palette::tailwind::{BLUE, SLATE},
     },
     symbols,
     text::Line,
     widgets::{
-        Block, BorderType, Borders, HighlightSpacing, List, ListItem, Padding, Paragraph,
-        StatefulWidget, Widget,
+        Block, Borders, HighlightSpacing, List, ListItem, Padding, Paragraph, StatefulWidget,
+        Widget,
     },
 };
 
@@ -19,8 +19,6 @@ const TODO_HEADER_STYLE: Style = Style::new().fg(SLATE.c100).bg(BLUE.c800);
 const NORMAL_ROW_BG: Color = SLATE.c950;
 const ALT_ROW_BG_COLOR: Color = SLATE.c900;
 const SELECTED_STYLE: Style = Style::new().bg(SLATE.c800).add_modifier(Modifier::BOLD);
-const TEXT_FG_COLOR: Color = SLATE.c200;
-const COMPLETED_TEXT_FG_COLOR: Color = GREEN.c500;
 
 impl Widget for &mut App {
     /// Renders the user interface widgets.
@@ -40,30 +38,20 @@ impl Widget for &mut App {
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .areas(main);
 
-        fn create_block(title: String) -> Block<'static> {
-            Block::bordered()
-                .title(title)
-                .title_alignment(Alignment::Center)
-                .border_type(BorderType::Rounded)
-        }
+        // fn create_block(title: String) -> Block<'static> {
+        //     Block::bordered()
+        //         .title(title)
+        //         .title_alignment(Alignment::Center)
+        //         .border_type(BorderType::Rounded)
+        // }
 
-        let body_block = create_block("venv".to_string());
-        let packages_block = create_block("packages".to_string());
         let footer_block = Block::new()
             .borders(Borders::empty())
             .padding(Padding::left(2));
 
-        let packages_text = String::from("This is where packages will be shown");
-
         let footer_text = String::from(
             "Exit: q | Movement: hjkl or arrow keys | Activate: a | Install: i | Requirements: r",
         );
-
-        let packages = Paragraph::new(packages_text)
-            .block(packages_block)
-            .fg(Color::LightRed)
-            .bg(Color::Black)
-            .centered();
 
         let footer = Paragraph::new(footer_text)
             .block(footer_block)
