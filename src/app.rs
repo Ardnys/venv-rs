@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::{
     event::{AppEvent, Event, EventHandler},
     venv::{Venv, VenvList},
@@ -13,10 +15,9 @@ pub struct App {
     /// Is the application running?
     pub running: bool,
     /// Counter.
-    pub counter: u8,
     /// Event handler.
     pub events: EventHandler,
-    pub venvs: VenvList,
+    pub venv_list: VenvList,
     pub venv_index: usize,
     // TODO: selected venv
 }
@@ -25,10 +26,9 @@ impl Default for App {
     fn default() -> Self {
         Self {
             running: true,
-            counter: 0,
             events: EventHandler::new(),
             venv_index: 0,
-            venvs: VenvList::from_iter([
+            venv_list: VenvList::from_iter([
                 (
                     "ptvision",
                     vec![
@@ -52,8 +52,16 @@ impl Default for App {
 
 impl App {
     /// Constructs a new instance of [`App`].
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(venv_path: &Path) -> Self {
+        Self {
+            running: true,
+            events: EventHandler::new(),
+            venv_list: VenvList::new(
+                Venv::from_venvs_dir(venv_path)
+                    .expect("Could not create VenvList because of an error from Venv"),
+            ),
+            venv_index: 0,
+        }
     }
 
     /// Run the application's main loop.
@@ -108,24 +116,24 @@ impl App {
         self.running = false;
     }
     pub fn select_next(&mut self) {
-        self.venvs.state.select_next();
+        self.venv_list.state.select_next();
         self.update_venv_index();
     }
     pub fn select_previuos(&mut self) {
-        self.venvs.state.select_previous();
+        self.venv_list.state.select_previous();
         self.update_venv_index();
     }
     pub fn select_first(&mut self) {
-        self.venvs.state.select_first();
+        self.venv_list.state.select_first();
         self.update_venv_index();
     }
     pub fn select_last(&mut self) {
-        self.venvs.state.select_last();
+        self.venv_list.state.select_last();
         self.update_venv_index();
     }
     pub fn update_venv_index(&mut self) {
-        if let Some(i) = self.venvs.state.selected() {
-            if i >= self.venvs.venvs.len() {
+        if let Some(i) = self.venv_list.state.selected() {
+            if i >= self.venv_list.venvs.len() {
                 self.select_first();
                 return;
             } else if i == usize::MAX {
@@ -136,6 +144,6 @@ impl App {
         }
     }
     pub fn get_selected_venv(&mut self) -> Venv {
-        self.venvs.venvs[self.venv_index].clone()
+        self.venv_list.venvs[self.venv_index].clone()
     }
 }

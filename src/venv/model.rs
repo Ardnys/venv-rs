@@ -1,6 +1,7 @@
 use std::{collections::HashMap, fs, path::Path};
 
 use anyhow::{Context, Result, anyhow};
+use color_eyre::owo_colors::OwoColorize;
 use ratatui::widgets::ListState;
 
 use crate::venv::parser::parse_from_dir;
@@ -24,7 +25,6 @@ pub struct Package {
 
 #[derive(Debug, Clone)]
 pub struct VenvList {
-    // TODO: rename it something else
     pub venvs: Vec<Venv>,
     pub state: ListState,
 }
@@ -64,6 +64,15 @@ impl Venv {
             .collect();
 
         Ok(venvs)
+    }
+}
+
+impl VenvList {
+    pub fn new(venvs: Vec<Venv>) -> Self {
+        Self {
+            venvs,
+            state: ListState::default(),
+        }
     }
 }
 

@@ -53,25 +53,11 @@ impl Widget for &mut App {
             .borders(Borders::empty())
             .padding(Padding::left(2));
 
-        let text = format!(
-            "This is a tui template.\n\
-                Press `Esc`, `Ctrl-C` or `q` to stop running.\n\
-                Press left and right to increment and decrement the counter respectively.\n\
-                Counter: {}",
-            self.counter
-        );
-
         let packages_text = String::from("This is where packages will be shown");
 
         let footer_text = String::from(
             "Exit: q | Movement: hjkl or arrow keys | Activate: a | Install: i | Requirements: r",
         );
-
-        let paragraph = Paragraph::new(text)
-            .block(body_block)
-            .fg(Color::Cyan)
-            .bg(Color::Black)
-            .centered();
 
         let packages = Paragraph::new(packages_text)
             .block(packages_block)
@@ -113,7 +99,7 @@ impl App {
             .bg(NORMAL_ROW_BG);
 
         let items: Vec<ListItem> = self
-            .venvs
+            .venv_list
             .venvs
             .iter()
             .enumerate()
@@ -129,7 +115,7 @@ impl App {
             .highlight_symbol(">")
             .highlight_spacing(HighlightSpacing::Always);
 
-        StatefulWidget::render(list, area, buf, &mut self.venvs.state);
+        StatefulWidget::render(list, area, buf, &mut self.venv_list.state);
     }
 
     fn render_packages(&mut self, area: Rect, buf: &mut Buffer) {
