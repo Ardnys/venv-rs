@@ -76,10 +76,11 @@ impl App {
     pub fn handle_events(&mut self) -> color_eyre::Result<()> {
         match self.events.next()? {
             Event::Tick => self.tick(),
-            Event::Crossterm(event) => match event {
-                crossterm::event::Event::Key(key_event) => self.handle_key_event(key_event)?,
-                _ => {}
-            },
+            Event::Crossterm(event) => {
+                if let crossterm::event::Event::Key(key_event) = event {
+                    self.handle_key_event(key_event)?
+                }
+            }
             Event::App(app_event) => match app_event {
                 AppEvent::Quit => self.quit(),
                 AppEvent::ScrollDown => self.select_next(),
