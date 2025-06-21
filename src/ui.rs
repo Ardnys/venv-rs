@@ -148,7 +148,7 @@ impl App {
             .enumerate()
             .map(|(i, pack)| {
                 let color = alternate_colors(i);
-                ListItem::from(pack.clone()).bg(color)
+                ListItem::from(pack.name.clone()).bg(color)
             })
             .collect();
 
