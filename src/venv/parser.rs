@@ -61,22 +61,22 @@ pub fn parse_from_dir(dir: &Path) -> Result<Venv> {
     if !dir.is_dir() {
         Err(anyhow!("{} is not directory.", dir.display()))
     } else {
-        println!("Reading dir: {}", dir.to_str().unwrap());
+        // println!("Reading dir: {}", dir.to_str().unwrap());
         let pyvevnv_cfg_file = dir.join("pyvenv.cfg");
 
         let cfg_contents = fs::read_to_string(&pyvevnv_cfg_file)
             .with_context(|| format!("Failed to read {}", pyvevnv_cfg_file.display()))?;
 
-        let version = parse_config_file_contents(cfg_contents);
-        println!("Python version: {version}");
+        let _version = parse_config_file_contents(cfg_contents);
+        // println!("Python version: {version}");
 
         #[cfg(target_os = "windows")]
         let binaries = dir.join("Scripts");
 
         #[cfg(target_os = "linux")]
-        let binaries = dir.join("bin");
+        let _binaries = dir.join("bin");
 
-        println!("Binary directory: {}", binaries.to_str().unwrap());
+        // println!("Binary directory: {}", binaries.to_str().unwrap());
 
         let lib_dir = dir.join("lib");
 

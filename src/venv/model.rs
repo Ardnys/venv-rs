@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fs, path::Path};
 
 use anyhow::{Result, anyhow};
-use ratatui::widgets::ListState;
+use ratatui::widgets::{ListState, ScrollbarState};
 
 use crate::venv::parser::parse_from_dir;
 
@@ -9,9 +9,9 @@ use crate::venv::parser::parse_from_dir;
 #[derive(Debug, Clone)]
 pub struct Venv {
     pub name: String,
-    // TODO: packages may be more complex later
     pub packages: Vec<Package>,
-    pub state: ListState,
+    pub list_state: ListState,
+    pub scroll_state: ScrollbarState,
 }
 
 #[derive(Debug, Clone)]
@@ -25,7 +25,8 @@ pub struct Package {
 #[derive(Debug, Clone)]
 pub struct VenvList {
     pub venvs: Vec<Venv>,
-    pub state: ListState,
+    pub list_state: ListState,
+    pub scroll_state: ScrollbarState,
 }
 
 impl Package {
@@ -47,8 +48,9 @@ impl Venv {
     pub fn new(name: &str, packages: Vec<Package>) -> Self {
         Self {
             name: name.to_string(),
+            scroll_state: ScrollbarState::new(packages.len()),
             packages,
-            state: ListState::default(),
+            list_state: ListState::default().with_selected(Some(0)),
         }
     }
 
@@ -69,15 +71,16 @@ impl Venv {
 impl VenvList {
     pub fn new(venvs: Vec<Venv>) -> Self {
         Self {
+            list_state: ListState::default().with_selected(Some(0)),
+            scroll_state: ScrollbarState::new(venvs.len()),
             venvs,
-            state: ListState::default(),
         }
     }
 }
 
 impl FromIterator<(&'static str, Vec<&'static str>)> for VenvList {
     fn from_iter<T: IntoIterator<Item = (&'static str, Vec<&'static str>)>>(iter: T) -> Self {
-        let items = iter
+        let items: Vec<_> = iter
             .into_iter()
             .map(|(name, packages)| {
                 Venv::new(
@@ -90,8 +93,9 @@ impl FromIterator<(&'static str, Vec<&'static str>)> for VenvList {
             })
             .collect();
         Self {
+            scroll_state: ScrollbarState::new(items.len()),
             venvs: items,
-            state: ListState::default(),
+            list_state: ListState::default(),
         }
     }
 }

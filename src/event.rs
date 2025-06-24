@@ -37,10 +37,13 @@ pub enum AppEvent {
     Quit,
     ScrollDown,
     ScrollUp,
-    SelectVenv, // TODO: movement events
-                // TODO selection event
-                // TODO activate event
-                // TODO install event
+    SwitchLeft,
+    SwitchRight,
+    SelectVenv,
+    // TODO: movement events
+    // TODO selection event
+    // TODO activate event
+    // TODO install event
 }
 
 /// Terminal event handler.

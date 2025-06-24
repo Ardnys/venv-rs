@@ -14,12 +14,19 @@ use ratatui::{
 pub struct App {
     /// Is the application running?
     pub running: bool,
-    /// Counter.
     /// Event handler.
     pub events: EventHandler,
     pub venv_list: VenvList,
     pub venv_index: usize,
+    pub packages_index: usize,
+    pub current_focus: Panel,
     // TODO: selected venv
+}
+
+#[derive(Debug)]
+pub enum Panel {
+    Venv,
+    Packages,
 }
 
 impl Default for App {
@@ -46,6 +53,8 @@ impl Default for App {
                 ),
                 ("async", vec!["asyncio", "aiortc", "requests"]),
             ]),
+            current_focus: Panel::Venv,
+            packages_index: 0,
         }
     }
 }
@@ -61,6 +70,8 @@ impl App {
                     .expect("Could not create VenvList because of an error from Venv"),
             ),
             venv_index: 0,
+            current_focus: Panel::Venv,
+            packages_index: 0,
         }
     }
 
@@ -85,6 +96,8 @@ impl App {
                 AppEvent::Quit => self.quit(),
                 AppEvent::ScrollDown => self.select_next(),
                 AppEvent::ScrollUp => self.select_previuos(),
+                AppEvent::SwitchLeft => self.switch_left(),
+                AppEvent::SwitchRight => self.switch_right(),
                 AppEvent::SelectVenv => todo!(),
             },
         }
@@ -100,6 +113,8 @@ impl App {
             }
             KeyCode::Up | KeyCode::Char('k') => self.events.send(AppEvent::ScrollUp),
             KeyCode::Down | KeyCode::Char('j') => self.events.send(AppEvent::ScrollDown),
+            KeyCode::Right | KeyCode::Char('l') => self.events.send(AppEvent::SwitchRight),
+            KeyCode::Left | KeyCode::Char('h') => self.events.send(AppEvent::SwitchLeft),
             // Other handlers you could add here.
             _ => {}
         }
@@ -116,24 +131,70 @@ impl App {
     pub fn quit(&mut self) {
         self.running = false;
     }
+    // === Switching Panels ===
+    pub fn switch_left(&mut self) {
+        self.current_focus = Panel::Venv;
+    }
+
+    pub fn switch_right(&mut self) {
+        self.current_focus = Panel::Packages;
+    }
+
+    // === List Operations ===
     pub fn select_next(&mut self) {
-        self.venv_list.state.select_next();
-        self.update_venv_index();
+        match self.current_focus {
+            Panel::Venv => {
+                self.venv_list.list_state.select_next();
+                self.update_venv_index();
+            }
+            Panel::Packages => {
+                let current_venv = self.get_selected_venv_ref();
+                current_venv.list_state.select_next();
+                self.update_package_index();
+            }
+        }
     }
     pub fn select_previuos(&mut self) {
-        self.venv_list.state.select_previous();
-        self.update_venv_index();
+        match self.current_focus {
+            Panel::Venv => {
+                self.venv_list.list_state.select_previous();
+                self.update_venv_index();
+            }
+            Panel::Packages => {
+                let current_venv = self.get_selected_venv_ref();
+                current_venv.list_state.select_previous();
+                self.update_package_index();
+            }
+        }
     }
     pub fn select_first(&mut self) {
-        self.venv_list.state.select_first();
-        self.update_venv_index();
+        match self.current_focus {
+            Panel::Venv => {
+                self.venv_list.list_state.select_first();
+                self.update_venv_index();
+            }
+            Panel::Packages => {
+                let current_venv = self.get_selected_venv_ref();
+                current_venv.list_state.select_first();
+                self.update_package_index();
+            }
+        }
     }
     pub fn select_last(&mut self) {
-        self.venv_list.state.select_last();
-        self.update_venv_index();
+        match self.current_focus {
+            Panel::Venv => {
+                self.venv_list.list_state.select_last();
+                self.update_venv_index();
+            }
+            Panel::Packages => {
+                let current_venv = self.get_selected_venv_ref();
+                current_venv.list_state.select_last();
+                self.update_package_index();
+            }
+        }
     }
     pub fn update_venv_index(&mut self) {
-        if let Some(i) = self.venv_list.state.selected() {
+        if let Some(i) = self.venv_list.list_state.selected() {
             if i >= self.venv_list.venvs.len() {
                 self.select_first();
                 return;
@@ -142,9 +203,28 @@ impl App {
                 return;
             }
             self.venv_index = i;
+            // reset the package index when venv changes
+            self.packages_index = 0;
+        }
+    }
+    pub fn update_package_index(&mut self) {
+        let current_venv = self.get_selected_venv_ref();
+        if let Some(i) = current_venv.list_state.selected() {
+            if i >= current_venv.packages.len() {
+                self.select_first();
+                return;
+            } else if i == usize::MAX {
+                self.select_last();
+                return;
+            }
+            self.packages_index = i;
         }
     }
     pub fn get_selected_venv(&mut self) -> Venv {
         self.venv_list.venvs[self.venv_index].clone()
+    }
+
+    pub fn get_selected_venv_ref(&mut self) -> &mut Venv {
+        &mut self.venv_list.venvs[self.venv_index]
     }
 }

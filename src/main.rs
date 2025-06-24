@@ -18,7 +18,7 @@ fn main() -> color_eyre::Result<()> {
     // TODO: unwrap or default to config ?
     // let venvs_dir = cli.venvs_dir.as_deref();
     if let Some(venvs_dir) = cli.venvs_dir.as_deref() {
-        println!("Virtual environment directory: {}", venvs_dir.display());
+        // println!("Virtual environment directory: {}", venvs_dir.display());
         let terminal = ratatui::init();
         let result = App::new(venvs_dir).run(terminal);
         ratatui::restore();

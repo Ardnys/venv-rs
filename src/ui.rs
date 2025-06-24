@@ -1,24 +1,22 @@
 use ratatui::{
     buffer::Buffer,
-    layout::{Constraint, Direction, Layout, Rect},
-    style::{
-        Color, Modifier, Style, Stylize,
-        palette::tailwind::{BLUE, SLATE},
-    },
-    symbols,
+    layout::{Constraint, Direction, Layout, Margin, Rect},
+    style::{Color, Modifier, Style, Stylize},
     text::Line,
     widgets::{
-        Block, Borders, HighlightSpacing, List, ListItem, Padding, Paragraph, StatefulWidget,
-        Widget,
+        Block, Borders, HighlightSpacing, List, ListItem, Padding, Paragraph, Scrollbar,
+        ScrollbarOrientation, StatefulWidget, Widget,
     },
 };
 
 use crate::app::App;
 
-const TODO_HEADER_STYLE: Style = Style::new().fg(SLATE.c100).bg(BLUE.c800);
-const NORMAL_ROW_BG: Color = SLATE.c950;
-const ALT_ROW_BG_COLOR: Color = SLATE.c900;
-const SELECTED_STYLE: Style = Style::new().bg(SLATE.c800).add_modifier(Modifier::BOLD);
+const PANEL_STYLE: Style = Style::new().fg(Color::White);
+const FOCUSED_PANEL_STYLE: Style = Style::new().fg(Color::Green);
+const SELECTED_STYLE: Style = Style::new()
+    .fg(Color::Black)
+    .bg(Color::Blue)
+    .add_modifier(Modifier::BOLD);
 
 impl Widget for &mut App {
     /// Renders the user interface widgets.
@@ -30,7 +28,7 @@ impl Widget for &mut App {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let [main, footer_chunk] = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Percentage(90), Constraint::Percentage(4)])
+            .constraints([Constraint::Percentage(97), Constraint::Percentage(3)])
             .areas(area);
 
         let [left, right] = Layout::default()
@@ -47,7 +45,7 @@ impl Widget for &mut App {
 
         let footer_block = Block::new()
             .borders(Borders::empty())
-            .padding(Padding::left(2));
+            .padding(Padding::left(1));
 
         let footer_text = String::from(
             "Exit: q | Movement: hjkl or arrow keys | Activate: a | Install: i | Requirements: r",
@@ -55,12 +53,9 @@ impl Widget for &mut App {
 
         let footer = Paragraph::new(footer_text)
             .block(footer_block)
-            .fg(Color::Yellow)
-            .bg(Color::Black)
+            .fg(Color::Blue)
             .left_aligned();
 
-        // paragraph.render(left, buf);
-        // packages.render(right, buf);
         footer.render(footer_chunk, buf);
 
         self.render_venvs(left, buf);
@@ -68,34 +63,38 @@ impl Widget for &mut App {
     }
 }
 
-const fn alternate_colors(i: usize) -> Color {
-    if i % 2 == 0 {
-        NORMAL_ROW_BG
-    } else {
-        ALT_ROW_BG_COLOR
-    }
-}
+// TODO: Is there a way to that while respecting user's terminal colors ?
+// const fn alternate_colors(i: usize) -> Color {
+//     if i % 2 == 0 {
+//         NORMAL_ROW_BG
+//     } else {
+//         ALT_ROW_BG_COLOR
+//     }
+// }
 
 // rendering for app
 impl App {
     fn render_venvs(&mut self, area: Rect, buf: &mut Buffer) {
         let block = Block::new()
             .title(Line::raw("Virtual Environments").centered())
-            .borders(Borders::TOP)
-            .border_set(symbols::border::EMPTY)
-            .border_style(TODO_HEADER_STYLE)
-            .bg(NORMAL_ROW_BG);
+            .borders(Borders::ALL)
+            .border_style(match self.current_focus {
+                crate::app::Panel::Venv => FOCUSED_PANEL_STYLE,
+                _ => PANEL_STYLE,
+            });
 
         let items: Vec<ListItem> = self
             .venv_list
             .venvs
             .iter()
-            .enumerate()
-            .map(|(i, venv)| {
-                let color = alternate_colors(i);
-                ListItem::from(venv.name.clone()).bg(color)
-            })
+            .map(|venv| ListItem::from(venv.name.clone()))
             .collect();
+
+        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(Some("↑"))
+            .end_symbol(Some("↓"));
+
+        let mut scrollbar_state = self.venv_list.scroll_state.position(self.venv_index);
 
         let list = List::new(items)
             .block(block)
@@ -103,28 +102,42 @@ impl App {
             .highlight_symbol(">")
             .highlight_spacing(HighlightSpacing::Always);
 
-        StatefulWidget::render(list, area, buf, &mut self.venv_list.state);
+        // render the list before rendering its scroll
+        StatefulWidget::render(list, area, buf, &mut self.venv_list.list_state);
+        StatefulWidget::render(
+            scrollbar,
+            area.inner(Margin {
+                // using an inner vertical margin of 1 unit makes the scrollbar inside the block
+                vertical: 1,
+                horizontal: 0,
+            }),
+            buf,
+            &mut scrollbar_state,
+        );
     }
 
     fn render_packages(&mut self, area: Rect, buf: &mut Buffer) {
         let block = Block::new()
             .title(Line::raw("Packages").centered())
             .borders(Borders::ALL)
-            .border_style(TODO_HEADER_STYLE)
-            .bg(NORMAL_ROW_BG);
+            .border_style(match self.current_focus {
+                crate::app::Panel::Packages => FOCUSED_PANEL_STYLE,
+                _ => PANEL_STYLE,
+            });
 
-        // TODO: get selected venv and get them packages
         let mut v = self.get_selected_venv();
 
         let items: Vec<ListItem> = v
             .packages
             .iter()
-            .enumerate()
-            .map(|(i, pack)| {
-                let color = alternate_colors(i);
-                ListItem::from(pack.name.clone()).bg(color)
-            })
+            .map(|pack| ListItem::from(pack.name.clone()))
             .collect();
+
+        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(Some("↑"))
+            .end_symbol(Some("↓"));
+
+        let mut scrollbar_state = v.scroll_state.position(self.packages_index);
 
         let list = List::new(items)
             .block(block)
@@ -132,6 +145,17 @@ impl App {
             .highlight_symbol(">")
             .highlight_spacing(HighlightSpacing::Always);
 
-        StatefulWidget::render(list, area, buf, &mut v.state);
+        // render the list before rendering its scroll
+        StatefulWidget::render(list, area, buf, &mut v.list_state);
+        StatefulWidget::render(
+            scrollbar,
+            area.inner(Margin {
+                // using an inner vertical margin of 1 unit makes the scrollbar inside the block
+                vertical: 1,
+                horizontal: 0,
+            }),
+            buf,
+            &mut scrollbar_state,
+        );
     }
 }
