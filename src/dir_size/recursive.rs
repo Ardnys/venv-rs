@@ -3,7 +3,7 @@ use super::chonk::Chonk;
 use std::fs;
 use std::path::Path;
 
-struct RecursiveReader;
+pub struct RecursiveReader;
 
 impl Chonk for RecursiveReader {
     fn get_dir_size(&self, dir: &Path) -> anyhow::Result<u64> {
