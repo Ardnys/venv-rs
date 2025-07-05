@@ -5,6 +5,7 @@ use crate::app::App;
 
 pub mod app;
 pub mod commands;
+pub mod dir_size;
 pub mod event;
 pub mod settings;
 pub mod ui;
