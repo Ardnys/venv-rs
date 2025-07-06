@@ -5,6 +5,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
+use venv_rs::dir_size::{self, Chonk};
 
 use crate::venv::{
     Venv,
@@ -96,6 +97,10 @@ pub fn parse_from_dir(dir: &Path) -> Result<Venv> {
             let metadata_map = parse_metadata(p.to_path_buf())
                 .with_context(|| format!("Failed to parse metadata at {}", p.display()))?;
 
+            let package_size = dir_size::ParallelReader
+                .get_dir_size(p)
+                .context("Could not get package size")?;
+
             let package = Package::new(
                 metadata_map
                     .get("Name")
@@ -103,6 +108,7 @@ pub fn parse_from_dir(dir: &Path) -> Result<Venv> {
                 metadata_map
                     .get("Version")
                     .context("Missing 'Version' field in METADATA")?,
+                package_size,
                 metadata_map.clone(),
             );
 

@@ -23,6 +23,7 @@ fn main() -> color_eyre::Result<()> {
         let terminal = ratatui::init();
         let result = App::new(venvs_dir).run(terminal);
         ratatui::restore();
+        // TODO: exit with paths or whatever
         result
     } else {
         Ok(())

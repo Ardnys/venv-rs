@@ -18,7 +18,7 @@ pub struct Venv {
 pub struct Package {
     pub name: String,
     pub version: String,
-    pub size: f32,
+    pub size: u64,
     pub metadata: HashMap<String, String>,
 }
 
@@ -30,11 +30,11 @@ pub struct VenvList {
 }
 
 impl Package {
-    pub fn new(name: &str, version: &str, metadata: HashMap<String, String>) -> Self {
+    pub fn new(name: &str, version: &str, size: u64, metadata: HashMap<String, String>) -> Self {
         Self {
             name: name.to_string(),
             version: version.to_string(),
-            size: 0.0,
+            size,
             metadata,
         }
     }
@@ -87,7 +87,7 @@ impl FromIterator<(&'static str, Vec<&'static str>)> for VenvList {
                     name,
                     packages
                         .iter()
-                        .map(|package| Package::new(package, "", HashMap::new()))
+                        .map(|package| Package::new(package, "", 0, HashMap::new()))
                         .collect(),
                 )
             })

@@ -2,7 +2,7 @@ use std::path::Path;
 
 use crate::{
     event::{AppEvent, Event, EventHandler},
-    venv::{Venv, VenvList},
+    venv::{Venv, VenvList, model::Package},
 };
 use ratatui::{
     DefaultTerminal,
@@ -223,8 +223,11 @@ impl App {
     pub fn get_selected_venv(&mut self) -> Venv {
         self.venv_list.venvs[self.venv_index].clone()
     }
-
     pub fn get_selected_venv_ref(&mut self) -> &mut Venv {
         &mut self.venv_list.venvs[self.venv_index]
+    }
+    pub fn get_selected_package(&mut self) -> Package {
+        let v = self.get_selected_venv();
+        v.packages[self.packages_index].clone()
     }
 }

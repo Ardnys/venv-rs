@@ -1,8 +1,8 @@
 use ratatui::{
     buffer::Buffer,
-    layout::{Constraint, Direction, Layout, Margin, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
     style::{Color, Modifier, Style, Stylize},
-    text::Line,
+    text::{Line, Span},
     widgets::{
         Block, Borders, HighlightSpacing, List, ListItem, Padding, Paragraph, Scrollbar,
         ScrollbarOrientation, StatefulWidget, Widget,
@@ -36,6 +36,11 @@ impl Widget for &mut App {
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .areas(main);
 
+        let [packages_layout, details_layout] = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
+            .areas(right);
+
         // fn create_block(title: String) -> Block<'static> {
         //     Block::bordered()
         //         .title(title)
@@ -47,9 +52,8 @@ impl Widget for &mut App {
             .borders(Borders::empty())
             .padding(Padding::left(1));
 
-        let footer_text = String::from(
-            "Exit: q | Movement: hjkl or arrow keys | Activate: a | Install: i | Requirements: r",
-        );
+        let footer_text =
+            String::from("Exit: q | Movement: hjkl or arrow keys | Activate: a | Requirements: r");
 
         let footer = Paragraph::new(footer_text)
             .block(footer_block)
@@ -59,7 +63,8 @@ impl Widget for &mut App {
         footer.render(footer_chunk, buf);
 
         self.render_venvs(left, buf);
-        self.render_packages(right, buf);
+        self.render_packages(packages_layout, buf);
+        self.render_package_details(details_layout, buf);
     }
 }
 
@@ -157,5 +162,29 @@ impl App {
             buf,
             &mut scrollbar_state,
         );
+    }
+
+    fn render_package_details(&mut self, area: Rect, buf: &mut Buffer) {
+        let block = Block::new()
+            .title(Line::raw("Details").centered())
+            .borders(Borders::ALL)
+            .border_style(PANEL_STYLE);
+
+        let package = self.get_selected_package();
+        let style = Style::new().yellow().italic();
+        let details = vec![
+            Line::from(Span::styled(format!("Name:     {}", package.name), style)),
+            Line::from(Span::styled(
+                format!("Version:  {}", package.version),
+                style,
+            )),
+            Line::from(Span::styled(format!("Size (B): {}", package.size), style)),
+        ];
+
+        let p = Paragraph::new(details)
+            .block(block)
+            .alignment(Alignment::Left);
+
+        p.render(area, buf);
     }
 }
