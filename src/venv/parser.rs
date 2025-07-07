@@ -5,15 +5,15 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
+use color_eyre::owo_colors::OwoColorize;
 use venv_rs::dir_size::{self, Chonk};
 
-use crate::venv::{
-    Venv,
-    model::Package,
-    utils::{get_dist_info_packages, get_python_dir},
-};
+use crate::venv::{Venv, model::Package, utils::get_python_dir};
 
-use super::metadata::METADATA_FEATURES;
+use super::{
+    metadata::METADATA_FEATURES,
+    utils::{get_packages, package_pairs},
+};
 
 pub fn parse_config_file_contents(contents: String) -> String {
     contents
@@ -84,31 +84,64 @@ pub fn parse_from_dir(dir: &Path) -> Result<Venv> {
         let python_dir = get_python_dir(lib_dir)?
             .context("Could not find python version directory under '/lib'")?;
         let site_packages = python_dir.join("site-packages");
-        let dist_info_packages = get_dist_info_packages(site_packages)
-            .context("Could not read 'dist-info' directories")?;
+        let (dist_info_packages, package_dirs) =
+            get_packages(site_packages).context("Could not read 'dist-info' directories")?;
 
         if dist_info_packages.is_empty() {
             return Err(anyhow!("No dist-info packages found in the venv"));
         }
 
+        let pairs = package_pairs(dist_info_packages, package_dirs);
+
         let mut packages: Vec<Package> = Vec::new();
 
-        for p in &dist_info_packages {
-            let metadata_map = parse_metadata(p.to_path_buf())
-                .with_context(|| format!("Failed to parse metadata at {}", p.display()))?;
+        for (pkg, dist_info) in &pairs {
+            let metadata_map = if let Some(d) = dist_info {
+                match parse_metadata(d.to_path_buf())
+                    .with_context(|| format!("Failed to parse metadata at {}", d.display()))
+                {
+                    Ok(m) => m,
+                    Err(err) => {
+                        eprintln!(
+                            "{} {}: {:#}",
+                            "error parsing metadata for".red().bold(),
+                            d.display().yellow(),
+                            err.red().italic()
+                        );
+                        HashMap::new()
+                    }
+                }
+            } else {
+                HashMap::new()
+            };
 
-            let package_size = dir_size::ParallelReader
-                .get_dir_size(p)
-                .context("Could not get package size")?;
+            let package_size = match dir_size::ParallelReader.get_dir_size(pkg) {
+                Ok(sz) => sz,
+                Err(err) => {
+                    eprintln!(
+                        "{} {}: {:#}",
+                        "Error while calculating size: ".red().bold(),
+                        pkg.display().yellow(),
+                        err.red().italic()
+                    );
+                    0
+                }
+            };
+
+            let dist_info_size = if let Some(d) = dist_info {
+                dir_size::ParallelReader
+                    .get_dir_size(d)
+                    .context("Could not get dist-info size")?
+            } else {
+                0
+            };
 
             let package = Package::new(
                 metadata_map
                     .get("Name")
-                    .context("Missing 'Name' field in METADATA")?,
-                metadata_map
-                    .get("Version")
-                    .context("Missing 'Version' field in METADATA")?,
-                package_size,
+                    .map_or(pkg.file_stem().unwrap().to_str().unwrap_or(""), |n| n),
+                metadata_map.get("Version").map_or("NIL", |n| n),
+                package_size + dist_info_size,
                 metadata_map.clone(),
             );
 

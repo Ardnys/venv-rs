@@ -11,6 +11,9 @@ pub struct ParallelReader;
 
 impl Chonk for ParallelReader {
     fn get_dir_size(&self, dir: &Path) -> Result<u64> {
+        if !dir.is_dir() {
+            return Ok(dir.metadata().map(|m| m.len()).unwrap_or(0));
+        }
         let entries: Vec<PathBuf> = fs::read_dir(dir)?
             .filter_map(|entry| entry.ok().map(|e| e.path()))
             .collect();

@@ -6,6 +6,13 @@ My python virtual environments easily get out of hand, especially when I work on
 
 Basically this will show me an overview of my virtual environments so I can keep them tidy.
 
+## Features
+- [x] showing packages in the venv
+- [x] showing package versions and sizes
+- [x] human readable byte sizes
+- [] venv details (python version, size, num packages etc.)
+- [] activate on exit
+
 [Ratatui]: https://ratatui.rs
 
 ## License

@@ -8,6 +8,7 @@ use ratatui::{
         ScrollbarOrientation, StatefulWidget, Widget,
     },
 };
+use venv_rs::dir_size::{Chonk, ParallelReader};
 
 use crate::app::App;
 
@@ -178,7 +179,10 @@ impl App {
                 format!("Version:  {}", package.version),
                 style,
             )),
-            Line::from(Span::styled(format!("Size (B): {}", package.size), style)),
+            Line::from(Span::styled(
+                format!("Size: {}", ParallelReader::formatted_size(package.size)),
+                style,
+            )),
         ];
 
         let p = Paragraph::new(details)

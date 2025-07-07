@@ -21,7 +21,8 @@ fn main() -> color_eyre::Result<()> {
     if let Some(venvs_dir) = cli.venvs_dir.as_deref() {
         // println!("Virtual environment directory: {}", venvs_dir.display());
         let terminal = ratatui::init();
-        let result = App::new(venvs_dir).run(terminal);
+        let app = App::new(venvs_dir.to_owned());
+        let result = app.run(terminal);
         ratatui::restore();
         // TODO: exit with paths or whatever
         result
@@ -31,7 +32,7 @@ fn main() -> color_eyre::Result<()> {
 }
 
 /*
-* actual usage:
+* planned usage:
 * opens the virtualenvs directory from config (default: ~/.virtualenvs/)
 * $ vem
 *

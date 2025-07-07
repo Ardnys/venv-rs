@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::PathBuf;
 
 use crate::{
     event::{AppEvent, Event, EventHandler},
@@ -16,7 +16,10 @@ pub struct App {
     pub running: bool,
     /// Event handler.
     pub events: EventHandler,
+    /// List of virtual environments
     pub venv_list: VenvList,
+    /// Path of virtual environments directory
+    pub venv_dir: PathBuf,
     pub venv_index: usize,
     pub packages_index: usize,
     pub current_focus: Panel,
@@ -34,6 +37,7 @@ impl Default for App {
         Self {
             running: true,
             events: EventHandler::new(),
+            venv_dir: PathBuf::new(),
             venv_index: 0,
             venv_list: VenvList::from_iter([
                 (
@@ -61,14 +65,15 @@ impl Default for App {
 
 impl App {
     /// Constructs a new instance of [`App`].
-    pub fn new(venv_path: &Path) -> Self {
+    pub fn new(venv_path: PathBuf) -> Self {
         Self {
             running: true,
             events: EventHandler::new(),
             venv_list: VenvList::new(
-                Venv::from_venvs_dir(venv_path)
+                Venv::from_venvs_dir(&venv_path)
                     .expect("Could not create VenvList because of an error from Venv"),
             ),
+            venv_dir: venv_path,
             venv_index: 0,
             current_focus: Panel::Venv,
             packages_index: 0,
@@ -119,6 +124,11 @@ impl App {
             _ => {}
         }
         Ok(())
+    }
+
+    pub fn print_venv_path(&mut self) {
+        let v = self.get_selected_venv();
+        println!("{}", self.venv_dir.join(v.name).display());
     }
 
     /// Handles the tick event of the terminal.
