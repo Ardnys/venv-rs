@@ -14,6 +14,7 @@ impl Chonk for ParallelReader {
         if !dir.is_dir() {
             return Ok(dir.metadata().map(|m| m.len()).unwrap_or(0));
         }
+        // TODO: this dingus follows symlinks and stuff. probs should not
         let entries: Vec<PathBuf> = fs::read_dir(dir)?
             .filter_map(|entry| entry.ok().map(|e| e.path()))
             .collect();

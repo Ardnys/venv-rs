@@ -9,6 +9,8 @@ use crate::venv::parser::parse_from_dir;
 #[derive(Debug, Clone)]
 pub struct Venv {
     pub name: String,
+    pub version: String,
+    pub size: u64,
     pub packages: Vec<Package>,
     pub list_state: ListState,
     pub scroll_state: ScrollbarState,
@@ -45,9 +47,11 @@ impl Venv {
         parse_from_dir(path)
     }
 
-    pub fn new(name: &str, packages: Vec<Package>) -> Self {
+    pub fn new(name: &str, version: String, size: u64, packages: Vec<Package>) -> Self {
         Self {
             name: name.to_string(),
+            version,
+            size,
             scroll_state: ScrollbarState::new(packages.len()),
             packages,
             list_state: ListState::default().with_selected(Some(0)),
@@ -85,6 +89,8 @@ impl FromIterator<(&'static str, Vec<&'static str>)> for VenvList {
             .map(|(name, packages)| {
                 Venv::new(
                     name,
+                    "4.20".to_string(),
+                    420,
                     packages
                         .iter()
                         .map(|package| Package::new(package, "", 0, HashMap::new()))

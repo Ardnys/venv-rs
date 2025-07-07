@@ -68,7 +68,7 @@ pub fn parse_from_dir(dir: &Path) -> Result<Venv> {
         let cfg_contents = fs::read_to_string(&pyvevnv_cfg_file)
             .with_context(|| format!("Failed to read {}", pyvevnv_cfg_file.display()))?;
 
-        let _version = parse_config_file_contents(cfg_contents);
+        let version = parse_config_file_contents(cfg_contents);
         // println!("Python version: {version}");
 
         #[cfg(target_os = "windows")]
@@ -148,7 +148,16 @@ pub fn parse_from_dir(dir: &Path) -> Result<Venv> {
             packages.push(package);
         }
 
-        let v = Venv::new(dir.file_stem().unwrap().to_str().unwrap(), packages);
+        let venv_size = dir_size::ParallelReader
+            .get_dir_size(dir)
+            .context("Could not get venv size")?;
+
+        let v = Venv::new(
+            dir.file_stem().unwrap().to_str().unwrap(),
+            version,
+            venv_size,
+            packages,
+        );
         Ok(v)
     }
 }

@@ -37,10 +37,15 @@ impl Widget for &mut App {
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .areas(main);
 
-        let [packages_layout, details_layout] = Layout::default()
+        let [packages_layout, pkg_details_layout] = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
             .areas(right);
+
+        let [venv_layout, venv_details_layout] = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
+            .areas(left);
 
         // fn create_block(title: String) -> Block<'static> {
         //     Block::bordered()
@@ -63,9 +68,10 @@ impl Widget for &mut App {
 
         footer.render(footer_chunk, buf);
 
-        self.render_venvs(left, buf);
+        self.render_venvs(venv_layout, buf);
         self.render_packages(packages_layout, buf);
-        self.render_package_details(details_layout, buf);
+        self.render_package_details(pkg_details_layout, buf);
+        self.render_venv_details(venv_details_layout, buf);
     }
 }
 
@@ -167,7 +173,7 @@ impl App {
 
     fn render_package_details(&mut self, area: Rect, buf: &mut Buffer) {
         let block = Block::new()
-            .title(Line::raw("Details").centered())
+            .title(Line::raw("Package Details").centered())
             .borders(Borders::ALL)
             .border_style(PANEL_STYLE);
 
@@ -181,6 +187,30 @@ impl App {
             )),
             Line::from(Span::styled(
                 format!("Size: {}", ParallelReader::formatted_size(package.size)),
+                style,
+            )),
+        ];
+
+        let p = Paragraph::new(details)
+            .block(block)
+            .alignment(Alignment::Left);
+
+        p.render(area, buf);
+    }
+
+    fn render_venv_details(&mut self, area: Rect, buf: &mut Buffer) {
+        let block = Block::new()
+            .title(Line::raw("Venv Details").centered())
+            .borders(Borders::ALL)
+            .border_style(PANEL_STYLE);
+
+        let venv = self.get_selected_venv();
+        let style = Style::new().yellow().italic();
+        let details = vec![
+            Line::from(Span::styled(format!("Name:     {}", venv.name), style)),
+            Line::from(Span::styled(format!("Version:  {}", venv.version), style)),
+            Line::from(Span::styled(
+                format!("Size: {}", ParallelReader::formatted_size(venv.size)),
                 style,
             )),
         ];
