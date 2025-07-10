@@ -12,6 +12,7 @@ pub struct Venv {
     pub version: String,
     pub size: u64,
     pub packages: Vec<Package>,
+    pub num_dist_info_packages: i32,
     pub list_state: ListState,
     pub scroll_state: ScrollbarState,
 }
@@ -47,13 +48,20 @@ impl Venv {
         parse_from_dir(path)
     }
 
-    pub fn new(name: &str, version: String, size: u64, packages: Vec<Package>) -> Self {
+    pub fn new(
+        name: &str,
+        version: String,
+        size: u64,
+        packages: Vec<Package>,
+        num_dist_info_packages: i32,
+    ) -> Self {
         Self {
             name: name.to_string(),
             version,
             size,
             scroll_state: ScrollbarState::new(packages.len()),
             packages,
+            num_dist_info_packages,
             list_state: ListState::default().with_selected(Some(0)),
         }
     }
@@ -95,6 +103,7 @@ impl FromIterator<(&'static str, Vec<&'static str>)> for VenvList {
                         .iter()
                         .map(|package| Package::new(package, "", 0, HashMap::new()))
                         .collect(),
+                    0,
                 )
             })
             .collect();

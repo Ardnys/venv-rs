@@ -210,7 +210,11 @@ impl App {
             Line::from(Span::styled(format!("Name:     {}", venv.name), style)),
             Line::from(Span::styled(format!("Version:  {}", venv.version), style)),
             Line::from(Span::styled(
-                format!("Size: {}", ParallelReader::formatted_size(venv.size)),
+                format!("# of Pkg: {}", venv.num_dist_info_packages),
+                style,
+            )),
+            Line::from(Span::styled(
+                format!("Size:     {}", ParallelReader::formatted_size(venv.size)),
                 style,
             )),
         ];

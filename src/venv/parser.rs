@@ -148,6 +148,11 @@ pub fn parse_from_dir(dir: &Path) -> Result<Venv> {
             packages.push(package);
         }
 
+        let num_pkg = packages
+            .iter()
+            .filter(|&x| !x.metadata.is_empty())
+            .fold(0, |acc, _| acc + 1);
+
         let venv_size = dir_size::ParallelReader
             .get_dir_size(dir)
             .context("Could not get venv size")?;
@@ -157,6 +162,7 @@ pub fn parse_from_dir(dir: &Path) -> Result<Venv> {
             version,
             venv_size,
             packages,
+            num_pkg,
         );
         Ok(v)
     }
