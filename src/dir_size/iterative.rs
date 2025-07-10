@@ -8,10 +8,14 @@ pub struct IterativeReader;
 impl Chonk for IterativeReader {
     fn get_dir_size(&self, dir: &Path) -> anyhow::Result<u64> {
         // very iterative lol
+        if !dir.is_dir() {
+            return Ok(dir.metadata().map(|m| m.len()).unwrap_or(0));
+        }
+
         let size = fs::read_dir(dir)?
             .filter_map(|item| item.map(|e| e.path()).ok())
             .fold(0, |acc, path: PathBuf| {
-                if path.is_dir() {
+                if path.is_dir() && !path.is_symlink() {
                     acc + self.get_dir_size(&path).unwrap()
                 } else {
                     acc + path.metadata().unwrap().len()

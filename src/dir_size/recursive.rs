@@ -8,10 +8,14 @@ pub struct RecursiveReader;
 impl Chonk for RecursiveReader {
     fn get_dir_size(&self, dir: &Path) -> anyhow::Result<u64> {
         let mut size = 0;
+        // TODO: revisit this later
+        if !dir.is_dir() {
+            return Ok(dir.metadata().map(|m| m.len()).unwrap_or(0));
+        }
         for entry in fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
-            if path.is_dir() {
+            if path.is_dir() && !path.is_symlink() {
                 size += self.get_dir_size(&path)?;
             } else {
                 size += entry.metadata()?.len();

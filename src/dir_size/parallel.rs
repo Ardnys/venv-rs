@@ -14,7 +14,6 @@ impl Chonk for ParallelReader {
         if !dir.is_dir() {
             return Ok(dir.metadata().map(|m| m.len()).unwrap_or(0));
         }
-        // TODO: this dingus follows symlinks and stuff. probs should not
         let entries: Vec<PathBuf> = fs::read_dir(dir)?
             .filter_map(|entry| entry.ok().map(|e| e.path()))
             .collect();
@@ -22,7 +21,7 @@ impl Chonk for ParallelReader {
         let size: u64 = entries
             .par_iter()
             .map(|path| {
-                if path.is_dir() {
+                if path.is_dir() && !path.is_symlink() {
                     self.get_dir_size(path).unwrap_or(0)
                 } else {
                     path.metadata().map(|m| m.len()).unwrap_or(0)
