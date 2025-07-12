@@ -1,3 +1,4 @@
+use app::Output;
 use clap::Parser;
 use commands::Cli;
 
@@ -24,8 +25,15 @@ fn main() -> color_eyre::Result<()> {
         let app = App::new(venvs_dir.to_owned());
         let result = app.run(terminal);
         ratatui::restore();
-        // TODO: exit with paths or whatever
-        result
+
+        let output = result?;
+        match output {
+            Output::VenvPath(path_buf) => println!("{}", path_buf.to_str().unwrap()),
+            Output::Requirements(s) => println!("{}", s),
+            Output::None => {}
+        }
+
+        Ok(())
     } else {
         Ok(())
     }

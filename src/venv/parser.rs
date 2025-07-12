@@ -163,6 +163,7 @@ pub fn parse_from_dir(dir: &Path) -> Result<Venv> {
             venv_size,
             packages,
             num_pkg,
+            _binaries,
         );
         Ok(v)
     }

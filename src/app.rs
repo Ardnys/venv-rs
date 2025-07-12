@@ -1,4 +1,7 @@
-use std::path::PathBuf;
+use std::{
+    path::PathBuf,
+    process::{ExitCode, Termination},
+};
 
 use crate::{
     event::{AppEvent, Event, EventHandler},
@@ -23,13 +26,29 @@ pub struct App {
     pub venv_index: usize,
     pub packages_index: usize,
     pub current_focus: Panel,
-    // TODO: selected venv
+    output: Output,
 }
 
 #[derive(Debug)]
 pub enum Panel {
     Venv,
     Packages,
+}
+
+#[derive(Debug)]
+pub enum Output {
+    /// path of the selected venv
+    VenvPath(PathBuf),
+    /// requirement of the selected venv
+    Requirements(String),
+    /// nothing
+    None,
+}
+
+impl Termination for Output {
+    fn report(self) -> std::process::ExitCode {
+        ExitCode::SUCCESS
+    }
 }
 
 impl Default for App {
@@ -59,6 +78,7 @@ impl Default for App {
             ]),
             current_focus: Panel::Venv,
             packages_index: 0,
+            output: Output::None,
         }
     }
 }
@@ -77,19 +97,20 @@ impl App {
             venv_index: 0,
             current_focus: Panel::Venv,
             packages_index: 0,
+            output: Output::None,
         }
     }
 
-    /// Run the application's main loop.
-    pub fn run(mut self, mut terminal: DefaultTerminal) -> color_eyre::Result<()> {
+    // Run the application's main loop.
+    pub fn run(mut self, mut terminal: DefaultTerminal) -> color_eyre::Result<Output> {
         while self.running {
             terminal.draw(|frame| frame.render_widget(&mut self, frame.area()))?;
             self.handle_events()?;
         }
-        Ok(())
+        Ok(self.output)
     }
 
-    pub fn handle_events(&mut self) -> color_eyre::Result<()> {
+    pub fn handle_events(&mut self) -> color_eyre::Result<Output> {
         match self.events.next()? {
             Event::Tick => self.tick(),
             Event::Crossterm(event) => {
@@ -103,10 +124,15 @@ impl App {
                 AppEvent::ScrollUp => self.select_previuos(),
                 AppEvent::SwitchLeft => self.switch_left(),
                 AppEvent::SwitchRight => self.switch_right(),
-                AppEvent::SelectVenv => todo!(),
+                AppEvent::SelectVenv => {
+                    let v = self.get_selected_venv();
+                    let venv_path = v.activation_path();
+                    self.output = Output::VenvPath(venv_path);
+                    self.quit();
+                }
             },
         }
-        Ok(())
+        Ok(Output::None)
     }
 
     /// Handles the key events and updates the state of [`App`].
@@ -120,6 +146,7 @@ impl App {
             KeyCode::Down | KeyCode::Char('j') => self.events.send(AppEvent::ScrollDown),
             KeyCode::Right | KeyCode::Char('l') => self.events.send(AppEvent::SwitchRight),
             KeyCode::Left | KeyCode::Char('h') => self.events.send(AppEvent::SwitchLeft),
+            KeyCode::Char('a') => self.events.send(AppEvent::SelectVenv),
             // Other handlers you could add here.
             _ => {}
         }

@@ -1,4 +1,9 @@
-use std::{collections::HashMap, fs, path::Path};
+use std::{
+    collections::HashMap,
+    fs,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use anyhow::{Result, anyhow};
 use ratatui::widgets::{ListState, ScrollbarState};
@@ -13,6 +18,7 @@ pub struct Venv {
     pub size: u64,
     pub packages: Vec<Package>,
     pub num_dist_info_packages: i32,
+    pub binaries: PathBuf,
     pub list_state: ListState,
     pub scroll_state: ScrollbarState,
 }
@@ -44,16 +50,13 @@ impl Package {
 }
 
 impl Venv {
-    pub fn from_path(path: &Path) -> Result<Self> {
-        parse_from_dir(path)
-    }
-
     pub fn new(
         name: &str,
         version: String,
         size: u64,
         packages: Vec<Package>,
         num_dist_info_packages: i32,
+        binaries: PathBuf,
     ) -> Self {
         Self {
             name: name.to_string(),
@@ -63,7 +66,12 @@ impl Venv {
             packages,
             num_dist_info_packages,
             list_state: ListState::default().with_selected(Some(0)),
+            binaries,
         }
+    }
+
+    pub fn from_path(path: &Path) -> Result<Self> {
+        parse_from_dir(path)
     }
 
     pub fn from_venvs_dir(path: &Path) -> Result<Vec<Self>> {
@@ -77,6 +85,15 @@ impl Venv {
             .collect();
 
         Ok(venvs)
+    }
+
+    pub fn activation_path(&self) -> PathBuf {
+        // TODO: can i check what kind of shell is active?
+        // WARN: only supports linux rn
+        PathBuf::from_str(&self.name)
+            .unwrap()
+            .join(&self.binaries)
+            .join(PathBuf::from_str("activate").unwrap())
     }
 }
 
@@ -104,6 +121,7 @@ impl FromIterator<(&'static str, Vec<&'static str>)> for VenvList {
                         .map(|package| Package::new(package, "", 0, HashMap::new()))
                         .collect(),
                     0,
+                    PathBuf::from_str("").unwrap(),
                 )
             })
             .collect();
