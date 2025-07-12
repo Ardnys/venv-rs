@@ -1,5 +1,6 @@
 use app::Output;
 use clap::Parser;
+use color_eyre::owo_colors::OwoColorize;
 use commands::Cli;
 
 use crate::app::App;
@@ -28,7 +29,16 @@ fn main() -> color_eyre::Result<()> {
 
         let output = result?;
         match output {
-            Output::VenvPath(path_buf) => println!("{}", path_buf.to_str().unwrap()),
+            Output::VenvPath(path_buf) => {
+                let path_str = path_buf.to_string_lossy();
+
+                println!(
+                    "{}\n\n  {} {}\n",
+                    "  🐍 To activate your virtualenv:".bold().green(),
+                    "source".yellow().bold(),
+                    path_str.bold()
+                );
+            }
             Output::Requirements(s) => println!("{}", s),
             Output::None => {}
         }
