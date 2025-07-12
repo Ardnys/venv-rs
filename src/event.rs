@@ -40,10 +40,7 @@ pub enum AppEvent {
     SwitchLeft,
     SwitchRight,
     SelectVenv,
-    // TODO: movement events
-    // TODO selection event
-    // TODO activate event
-    // TODO install event
+    Requirements,
 }
 
 /// Terminal event handler.

@@ -2,10 +2,11 @@ use std::{
     collections::HashMap,
     fs,
     path::{Path, PathBuf},
+    process::Command,
     str::FromStr,
 };
 
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use ratatui::widgets::{ListState, ScrollbarState};
 
 use crate::venv::parser::parse_from_dir;
@@ -94,6 +95,15 @@ impl Venv {
             .unwrap()
             .join(&self.binaries)
             .join(PathBuf::from_str("activate").unwrap())
+    }
+
+    pub fn requirements(&self) -> PathBuf {
+        // TODO: I'll try to recreate it properly
+        // WARN: I know very hacky
+        PathBuf::from_str(&self.name)
+            .unwrap()
+            .join(&self.binaries)
+            .join(PathBuf::from_str("python").unwrap())
     }
 }
 

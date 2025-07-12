@@ -75,7 +75,7 @@ pub fn parse_from_dir(dir: &Path) -> Result<Venv> {
         let binaries = dir.join("Scripts");
 
         #[cfg(target_os = "linux")]
-        let _binaries = dir.join("bin");
+        let binaries = dir.join("bin");
 
         // println!("Binary directory: {}", binaries.to_str().unwrap());
 
@@ -163,7 +163,7 @@ pub fn parse_from_dir(dir: &Path) -> Result<Venv> {
             venv_size,
             packages,
             num_pkg,
-            _binaries,
+            binaries,
         );
         Ok(v)
     }

@@ -1,6 +1,6 @@
 use std::{
     path::PathBuf,
-    process::{ExitCode, Termination},
+    process::{Command, ExitCode, Termination},
 };
 
 use crate::{
@@ -125,9 +125,25 @@ impl App {
                 AppEvent::SwitchLeft => self.switch_left(),
                 AppEvent::SwitchRight => self.switch_right(),
                 AppEvent::SelectVenv => {
-                    let v = self.get_selected_venv();
+                    let v = self.get_selected_venv_ref();
                     let venv_path = v.activation_path();
                     self.output = Output::VenvPath(venv_path);
+                    self.quit();
+                }
+                AppEvent::Requirements => {
+                    let v = self.get_selected_venv_ref();
+                    // TODO: terrible error handling here. fix it. probs show the error message in
+                    // the TUI
+                    // TODO: confirmation as well
+                    let python = v.requirements();
+                    let output = Command::new(python)
+                        .args(["-m", "pip", "freeze"])
+                        .output()?;
+
+                    let req = String::from_utf8(output.stdout)
+                        .expect("Could not create string from output.stdout");
+
+                    self.output = Output::Requirements(req);
                     self.quit();
                 }
             },
@@ -147,15 +163,11 @@ impl App {
             KeyCode::Right | KeyCode::Char('l') => self.events.send(AppEvent::SwitchRight),
             KeyCode::Left | KeyCode::Char('h') => self.events.send(AppEvent::SwitchLeft),
             KeyCode::Char('a') => self.events.send(AppEvent::SelectVenv),
+            KeyCode::Char('r') => self.events.send(AppEvent::Requirements),
             // Other handlers you could add here.
             _ => {}
         }
         Ok(())
-    }
-
-    pub fn print_venv_path(&mut self) {
-        let v = self.get_selected_venv();
-        println!("{}", self.venv_dir.join(v.name).display());
     }
 
     /// Handles the tick event of the terminal.
