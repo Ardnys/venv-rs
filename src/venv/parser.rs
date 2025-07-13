@@ -4,8 +4,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{Context, Result, anyhow};
-use color_eyre::owo_colors::OwoColorize;
+use color_eyre::{
+    eyre::{self, Result, WrapErr},
+    owo_colors::OwoColorize,
+};
 use venv_rs::dir_size::{self, Chonk};
 
 use crate::venv::{Venv, model::Package, utils::get_python_dir};
@@ -60,7 +62,7 @@ pub fn parse_metadata(dist_info_path: PathBuf) -> Result<HashMap<String, String>
 // expects dir to be a virtual environment
 pub fn parse_from_dir(dir: &Path) -> Result<Venv> {
     if !dir.is_dir() {
-        Err(anyhow!("{} is not directory.", dir.display()))
+        Err(eyre::eyre!("{} is not directory.", dir.display()))
     } else {
         // println!("Reading dir: {}", dir.to_str().unwrap());
         let pyvevnv_cfg_file = dir.join("pyvenv.cfg");
@@ -82,13 +84,13 @@ pub fn parse_from_dir(dir: &Path) -> Result<Venv> {
         let lib_dir = dir.join("lib");
 
         let python_dir = get_python_dir(lib_dir)?
-            .context("Could not find python version directory under '/lib'")?;
+            .ok_or_else(|| eyre::eyre!("Could not find python version directory under '/lib'"))?;
         let site_packages = python_dir.join("site-packages");
         let (dist_info_packages, package_dirs) =
-            get_packages(site_packages).context("Could not read 'dist-info' directories")?;
+            get_packages(site_packages).wrap_err("Could not read 'dist-info' directories")?;
 
         if dist_info_packages.is_empty() {
-            return Err(anyhow!("No dist-info packages found in the venv"));
+            return Err(eyre::eyre!("No dist-info packages found in the venv"));
         }
 
         let pairs = package_pairs(dist_info_packages, package_dirs);

@@ -2,11 +2,11 @@ use std::{
     collections::HashMap,
     fs,
     path::{Path, PathBuf},
-    process::Command,
     str::FromStr,
 };
 
-use anyhow::{Context, Result, anyhow};
+use color_eyre::Result;
+use color_eyre::eyre;
 use ratatui::widgets::{ListState, ScrollbarState};
 
 use crate::venv::parser::parse_from_dir;
@@ -77,7 +77,7 @@ impl Venv {
 
     pub fn from_venvs_dir(path: &Path) -> Result<Vec<Self>> {
         if !path.is_dir() {
-            return Err(anyhow!("{} is not a directory", path.display()));
+            return Err(eyre::eyre!("{} is not a directory", path.display()));
         }
         let venvs: Vec<Self> = fs::read_dir(path)?
             .filter_map(Result::ok)

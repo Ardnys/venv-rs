@@ -6,7 +6,7 @@ use std::path::Path;
 pub struct RecursiveReader;
 
 impl Chonk for RecursiveReader {
-    fn get_dir_size(&self, dir: &Path) -> anyhow::Result<u64> {
+    fn get_dir_size(&self, dir: &Path) -> color_eyre::Result<u64> {
         let mut size = 0;
         // TODO: revisit this later
         if !dir.is_dir() {
@@ -35,7 +35,7 @@ mod tests {
     use super::RecursiveReader;
 
     #[test]
-    fn test_recursive_dir_size() -> anyhow::Result<()> {
+    fn test_recursive_dir_size() -> color_eyre::Result<()> {
         let dir = Path::new("test_directories/basic");
         let method = RecursiveReader;
         let size = method.get_dir_size(dir)?;

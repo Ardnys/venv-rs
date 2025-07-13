@@ -1,7 +1,7 @@
 use std::path::Path;
 
 pub trait Chonk {
-    fn get_dir_size(&self, dir: &Path) -> anyhow::Result<u64>;
+    fn get_dir_size(&self, dir: &Path) -> color_eyre::Result<u64>;
     fn formatted_size(size: u64) -> String {
         let (num, suffix) = match size {
             0..1_000 => (size, "B"),

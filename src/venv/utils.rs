@@ -1,6 +1,6 @@
 use std::{fs, io, path::PathBuf};
 
-use anyhow::Result;
+use color_eyre::Result;
 
 pub fn get_python_dir(lib_dir: PathBuf) -> io::Result<Option<PathBuf>> {
     let mut entries = fs::read_dir(lib_dir)?

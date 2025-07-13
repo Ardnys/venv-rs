@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 pub struct IterativeReader;
 
 impl Chonk for IterativeReader {
-    fn get_dir_size(&self, dir: &Path) -> anyhow::Result<u64> {
+    fn get_dir_size(&self, dir: &Path) -> color_eyre::Result<u64> {
         // very iterative lol
         if !dir.is_dir() {
             return Ok(dir.metadata().map(|m| m.len()).unwrap_or(0));
@@ -35,7 +35,7 @@ mod tests {
     use super::IterativeReader;
 
     #[test]
-    fn test_iterative_dir_size() -> anyhow::Result<()> {
+    fn test_iterative_dir_size() -> color_eyre::Result<()> {
         let dir = Path::new("test_directories/basic");
         let method = IterativeReader;
         let size = method.get_dir_size(dir)?;

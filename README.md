@@ -24,12 +24,16 @@ scope may change as well so even take this README with a generous sprinkle of to
 - [x] venv details (python version, size, num packages)
 - [x] _encourage_ activation on exit
 - [x] print the requirements.txt
-- [ ] popup confirmation as a flag
+- [x] remove anyhow
 - [ ] custom activation encouragement with shell detection 
+- [ ] parse package dependencies
+    - [ ] add them to the package size
+    - [ ] show dependencies in UI
+    - [ ] (extra) tree view
+- [ ] popup confirmation as a flag
 - [ ] windows compatibility
-- [ ] fix anyhow & color_eyre situation
 - [ ] config file
-- [ ] the directory tree and look for .env folders. that way i don't have to limit to this particular workflow.
+- [ ] walk the directory tree and look for .env folders. that way i don't have to limit to this particular workflow.
 
 [Ratatui]: https://ratatui.rs
 

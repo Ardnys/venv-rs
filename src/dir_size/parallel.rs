@@ -1,4 +1,3 @@
-use anyhow::Result;
 use rayon::prelude::*;
 use std::{
     fs,
@@ -10,7 +9,7 @@ use super::chonk::Chonk;
 pub struct ParallelReader;
 
 impl Chonk for ParallelReader {
-    fn get_dir_size(&self, dir: &Path) -> Result<u64> {
+    fn get_dir_size(&self, dir: &Path) -> color_eyre::Result<u64> {
         if !dir.is_dir() {
             return Ok(dir.metadata().map(|m| m.len()).unwrap_or(0));
         }
@@ -43,7 +42,7 @@ mod tests {
     use super::ParallelReader;
 
     #[test]
-    fn test_parallel_dir_size() -> anyhow::Result<()> {
+    fn test_parallel_dir_size() -> color_eyre::Result<()> {
         let dir = Path::new("test_directories/basic");
         let method = ParallelReader;
         let size = method.get_dir_size(dir)?;

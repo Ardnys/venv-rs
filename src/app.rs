@@ -1,7 +1,4 @@
-use std::{
-    path::PathBuf,
-    process::{Command, ExitCode, Termination},
-};
+use std::{path::PathBuf, process::Command};
 
 use crate::{
     event::{AppEvent, Event, EventHandler},
@@ -43,12 +40,6 @@ pub enum Output {
     Requirements(String),
     /// nothing
     None,
-}
-
-impl Termination for Output {
-    fn report(self) -> std::process::ExitCode {
-        ExitCode::SUCCESS
-    }
 }
 
 impl Default for App {
