@@ -22,6 +22,8 @@ fn main() -> color_eyre::Result<()> {
     // let venvs_dir = cli.venvs_dir.as_deref();
     if let Some(venvs_dir) = cli.venvs_dir.as_deref() {
         // println!("Virtual environment directory: {}", venvs_dir.display());
+
+        // Venv::from_venvs_dir(venvs_dir)?;
         let terminal = ratatui::init();
         let app = App::new(venvs_dir.to_owned());
         let result = app.run(terminal);

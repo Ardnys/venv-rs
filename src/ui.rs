@@ -2,7 +2,7 @@ use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
     style::{Color, Modifier, Style, Stylize},
-    text::{Line, Span},
+    text::{Line, Span, Text},
     widgets::{
         Block, Borders, HighlightSpacing, List, ListItem, Padding, Paragraph, Scrollbar,
         ScrollbarOrientation, StatefulWidget, Widget,
@@ -42,17 +42,15 @@ impl Widget for &mut App {
             .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
             .areas(right);
 
+        let [pkg_details, pkg_dependencies] = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .areas(pkg_details_layout);
+
         let [venv_layout, venv_details_layout] = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
             .areas(left);
-
-        // fn create_block(title: String) -> Block<'static> {
-        //     Block::bordered()
-        //         .title(title)
-        //         .title_alignment(Alignment::Center)
-        //         .border_type(BorderType::Rounded)
-        // }
 
         let footer_block = Block::new()
             .borders(Borders::empty())
@@ -70,7 +68,8 @@ impl Widget for &mut App {
 
         self.render_venvs(venv_layout, buf);
         self.render_packages(packages_layout, buf);
-        self.render_package_details(pkg_details_layout, buf);
+        self.render_package_details(pkg_details, buf);
+        self.render_package_dependencies(pkg_dependencies, buf);
         self.render_venv_details(venv_details_layout, buf);
     }
 }
@@ -179,10 +178,15 @@ impl App {
 
         let package = self.get_selected_package();
         let style = Style::new().yellow().italic();
+
         let details = vec![
             Line::from(Span::styled(format!("Name:     {}", package.name), style)),
             Line::from(Span::styled(
                 format!("Version:  {}", package.version),
+                style,
+            )),
+            Line::from(Span::styled(
+                format!("Summary:  {}", package.metadata.summary),
                 style,
             )),
             Line::from(Span::styled(
@@ -198,6 +202,33 @@ impl App {
         p.render(area, buf);
     }
 
+    fn render_package_dependencies(&mut self, area: Rect, buf: &mut Buffer) {
+        let block = Block::new()
+            .title(Line::raw("Package Depedencies").centered())
+            .borders(Borders::ALL)
+            .border_style(PANEL_STYLE);
+
+        let package = self.get_selected_package();
+        let style = Style::new().red().bold();
+
+        let deps: Vec<Line> = package
+            .metadata
+            .depedencies
+            .unwrap_or_default()
+            .iter()
+            .map(|d| Line::from(Span::styled(d.to_string(), style)))
+            .collect();
+
+        let p = if deps.is_empty() {
+            Paragraph::new(Text::styled("! No Dependencies !", style))
+        } else {
+            Paragraph::new(deps)
+        };
+        let p = p.block(block).alignment(Alignment::Left);
+
+        p.render(area, buf);
+    }
+
     fn render_venv_details(&mut self, area: Rect, buf: &mut Buffer) {
         let block = Block::new()
             .title(Line::raw("Venv Details").centered())
@@ -205,7 +236,7 @@ impl App {
             .border_style(PANEL_STYLE);
 
         let venv = self.get_selected_venv();
-        let style = Style::new().yellow().italic();
+        let style = Style::new().light_blue().italic();
         let details = vec![
             Line::from(Span::styled(format!("Name:     {}", venv.name), style)),
             Line::from(Span::styled(format!("Version:  {}", venv.version), style)),

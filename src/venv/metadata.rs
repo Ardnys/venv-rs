@@ -1,1 +1,1 @@
-pub const METADATA_FEATURES: [&str; 3] = ["Name", "Version", "Summary"];
+pub const METADATA_FEATURES: [&str; 4] = ["Name", "Version", "Summary", "Requires-Dist"];

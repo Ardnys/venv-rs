@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::HashSet,
     fs,
     path::{Path, PathBuf},
 };
@@ -12,10 +12,110 @@ use venv_rs::dir_size::{self, Chonk};
 
 use crate::venv::{Venv, model::Package, utils::get_python_dir};
 
-use super::{
-    metadata::METADATA_FEATURES,
-    utils::{get_packages, package_pairs},
-};
+use super::utils::{get_packages, package_pairs};
+
+pub enum MetadataTokens {
+    Name(String),
+    Version(String),
+    Summary(String),
+    Dependency(String),
+}
+
+#[derive(Debug, Clone)]
+pub struct Metadata {
+    pub name: String,
+    pub version: String,
+    pub summary: String,
+    pub depedencies: Option<HashSet<String>>,
+}
+
+#[derive(Default)]
+pub struct MetadataBuilder {
+    pub name: Option<String>,
+    pub version: Option<String>,
+    pub summary: Option<String>,
+    pub depedencies: Option<HashSet<String>>,
+}
+
+impl MetadataBuilder {
+    pub fn new() -> Self {
+        Self {
+            name: None,
+            version: None,
+            summary: None,
+            depedencies: None,
+        }
+    }
+    pub fn name(&mut self, name: String) -> &mut Self {
+        self.name = Some(name);
+        self
+    }
+    pub fn version(&mut self, version: String) -> &mut Self {
+        self.version = Some(version);
+        self
+    }
+    pub fn summary(&mut self, summary: String) -> &mut Self {
+        self.summary = Some(summary);
+        self
+    }
+    pub fn add_dependencies(&mut self, dependencies: HashSet<String>) -> &mut Self {
+        self.depedencies = Some(dependencies);
+        self
+    }
+    pub fn build(&mut self) -> Metadata {
+        Metadata {
+            name: self.name.clone().unwrap_or_default(),
+            version: self.version.clone().unwrap_or_default(),
+            summary: self.summary.clone().unwrap_or_default(),
+            depedencies: self.depedencies.clone(),
+        }
+    }
+}
+
+impl Metadata {
+    pub fn parse_tokens(tokens: Vec<MetadataTokens>) -> color_eyre::Result<Metadata> {
+        let mut builder = &mut MetadataBuilder::default();
+        let mut dependencies: HashSet<String> = HashSet::new();
+        for tok in tokens {
+            match tok {
+                MetadataTokens::Name(name) => builder = builder.name(name),
+                MetadataTokens::Version(version) => builder = builder.version(version),
+                MetadataTokens::Summary(summary) => builder = builder.summary(summary),
+                MetadataTokens::Dependency(dep) => {
+                    let dep_name = Self::parse_dependency(dep);
+                    let _ = dependencies.insert(dep_name);
+                }
+            }
+        }
+        if !dependencies.is_empty() {
+            builder.add_dependencies(dependencies);
+        }
+        let md = builder.build();
+        Ok(md)
+    }
+
+    fn parse_dependency(dep: String) -> String {
+        Self::split_at_separator(dep)
+    }
+
+    fn split_at_separator(dep: String) -> String {
+        let mut split_index = 0;
+        for (i, c) in dep.char_indices() {
+            match c {
+                '>' | '=' | ' ' | '\n' | ';' | '!' | '<' => {
+                    split_index = i;
+                    break;
+                }
+                _ => { /* consume */ }
+            }
+        }
+        if split_index == 0 {
+            split_index = dep.len();
+        }
+
+        dep.split_at(split_index).0.to_string()
+    }
+}
 
 pub fn parse_config_file_contents(contents: String) -> String {
     contents
@@ -28,7 +128,7 @@ pub fn parse_config_file_contents(contents: String) -> String {
         .unwrap()
 }
 
-pub fn parse_metadata(dist_info_path: PathBuf) -> Result<HashMap<String, String>> {
+pub fn parse_metadata(dist_info_path: PathBuf) -> Result<Metadata> {
     // TODO: json config file in the future
     let metadata_path = dist_info_path.join("METADATA");
     let metadata_contents = fs::read_to_string(&metadata_path)
@@ -50,14 +150,21 @@ pub fn parse_metadata(dist_info_path: PathBuf) -> Result<HashMap<String, String>
         header.push(line);
     }
 
-    let metadata_values: HashMap<String, String> = header
+    let tokens: Vec<MetadataTokens> = header
         .iter()
         .filter_map(|line| line.split_once(": "))
-        .filter(|(name, _)| METADATA_FEATURES.contains(name))
-        .map(|(name, value)| (name.to_string(), value.to_string()))
+        .filter_map(|(key, value)| match key {
+            "Name" => Some(MetadataTokens::Name(value.to_string())),
+            "Version" => Some(MetadataTokens::Version(value.to_string())),
+            "Summary" => Some(MetadataTokens::Summary(value.to_string())),
+            "Requires-Dist" => Some(MetadataTokens::Dependency(value.to_string())),
+            _ => None, // skip unknown keys
+        })
         .collect();
 
-    Ok(metadata_values)
+    let metadata = Metadata::parse_tokens(tokens)?;
+
+    Ok(metadata)
 }
 // expects dir to be a virtual environment
 pub fn parse_from_dir(dir: &Path) -> Result<Venv> {
@@ -73,11 +180,13 @@ pub fn parse_from_dir(dir: &Path) -> Result<Venv> {
         let version = parse_config_file_contents(cfg_contents);
         // println!("Python version: {version}");
 
-        #[cfg(target_os = "windows")]
-        let binaries = dir.join("Scripts");
+        let is_windows = cfg!(windows);
 
-        #[cfg(target_os = "linux")]
-        let binaries = dir.join("bin");
+        let binaries = if is_windows {
+            dir.join("Scripts")
+        } else {
+            dir.join("bin")
+        };
 
         // println!("Binary directory: {}", binaries.to_str().unwrap());
 
@@ -96,13 +205,18 @@ pub fn parse_from_dir(dir: &Path) -> Result<Venv> {
         let pairs = package_pairs(dist_info_packages, package_dirs);
 
         let mut packages: Vec<Package> = Vec::new();
+        let mut num_pkg = 0;
 
         for (pkg, dist_info) in &pairs {
+            // println!("Pkg: {}", pkg.to_str().unwrap());
             let metadata_map = if let Some(d) = dist_info {
                 match parse_metadata(d.to_path_buf())
                     .with_context(|| format!("Failed to parse metadata at {}", d.display()))
                 {
-                    Ok(m) => m,
+                    Ok(m) => {
+                        num_pkg += 1;
+                        m
+                    }
                     Err(err) => {
                         eprintln!(
                             "{} {}: {:#}",
@@ -110,24 +224,29 @@ pub fn parse_from_dir(dir: &Path) -> Result<Venv> {
                             d.display().yellow(),
                             err.red().italic()
                         );
-                        HashMap::new()
+                        MetadataBuilder::default().build()
                     }
                 }
             } else {
-                HashMap::new()
+                continue;
+                // MetadataBuilder::default().build()
             };
 
-            let package_size = match dir_size::ParallelReader.get_dir_size(pkg) {
-                Ok(sz) => sz,
-                Err(err) => {
-                    eprintln!(
-                        "{} {}: {:#}",
-                        "Error while calculating size: ".red().bold(),
-                        pkg.display().yellow(),
-                        err.red().italic()
-                    );
-                    0
+            let package_size = if let Some(p) = pkg {
+                match dir_size::ParallelReader.get_dir_size(p) {
+                    Ok(sz) => sz,
+                    Err(err) => {
+                        eprintln!(
+                            "{} {}: {:#}",
+                            "Error while calculating size: ".red().bold(),
+                            p.display().yellow(),
+                            err.red().italic()
+                        );
+                        0
+                    }
                 }
+            } else {
+                0
             };
 
             let dist_info_size = if let Some(d) = dist_info {
@@ -139,21 +258,15 @@ pub fn parse_from_dir(dir: &Path) -> Result<Venv> {
             };
 
             let package = Package::new(
-                metadata_map
-                    .get("Name")
-                    .map_or(pkg.file_stem().unwrap().to_str().unwrap_or(""), |n| n),
-                metadata_map.get("Version").map_or("NIL", |n| n),
+                &metadata_map.name,
+                &metadata_map.version,
                 package_size + dist_info_size,
                 metadata_map.clone(),
             );
+            // println!("pck: {:?}", package);
 
             packages.push(package);
         }
-
-        let num_pkg = packages
-            .iter()
-            .filter(|&x| !x.metadata.is_empty())
-            .fold(0, |acc, _| acc + 1);
 
         let venv_size = dir_size::ParallelReader
             .get_dir_size(dir)

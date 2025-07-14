@@ -23,22 +23,26 @@ pub fn get_dist_info_packages(site_packages: PathBuf) -> Result<Vec<PathBuf>> {
 pub fn package_pairs(
     dist_infos: Vec<PathBuf>,
     packages: Vec<PathBuf>,
-) -> Vec<(PathBuf, Option<PathBuf>)> {
+) -> Vec<(Option<PathBuf>, Option<PathBuf>)> {
+    // TODO: this ain't working that well anymore
     let mut pairs = Vec::with_capacity(packages.len());
 
     for pkg in packages.into_iter() {
         let pkg_name = pkg.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
         let matched = dist_infos.iter().find_map(|di| {
+            // dist-info anatomy {name}-{version}.dist-info
+            // name anatomy {name} , though with a lot edge cases
+            // Case 1. {name}.libs (such as opencv)
+            // Case 2. split at _ {name_suffix} -> {name}
+            // Case 3. remove _ {name_suffix} -> {namesuffix}
+            // Case 4. unpredictable things like scikit-learn imported as sklearn
+
             let di_fname = di.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
-            // Must end with ".dist-info"
-            let without_suffix = di_fname.strip_suffix(".dist-info")?;
+            let without_suffix = di_fname.strip_suffix(".dist-info").unwrap();
 
-            // without_suffix is "{name}-{version}" – split at last hyphen
-            let name_part = without_suffix
-                .rfind('-')
-                .map(|idx| &without_suffix[..idx])?;
+            let (name_part, _) = without_suffix.split_once("-")?;
 
             if name_part == pkg_name {
                 Some(di.clone())
@@ -47,7 +51,14 @@ pub fn package_pairs(
             }
         });
 
-        pairs.push((pkg.clone(), matched));
+        pairs.push((Some(pkg.clone()), matched));
+    }
+
+    // at last, check pairs and fill missing dist-info
+    for d in &dist_infos {
+        if !pairs.iter().any(|(_, di)| *di == Some(d.to_path_buf())) {
+            pairs.push((None, Some(d.to_path_buf())));
+        }
     }
 
     pairs

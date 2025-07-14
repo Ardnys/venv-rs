@@ -1,6 +1,5 @@
 use std::{
-    collections::HashMap,
-    fs,
+    fs::{self},
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -10,6 +9,8 @@ use color_eyre::eyre;
 use ratatui::widgets::{ListState, ScrollbarState};
 
 use crate::venv::parser::parse_from_dir;
+
+use super::parser::Metadata;
 
 // TODO: might add more details later
 #[derive(Debug, Clone)]
@@ -29,7 +30,7 @@ pub struct Package {
     pub name: String,
     pub version: String,
     pub size: u64,
-    pub metadata: HashMap<String, String>,
+    pub metadata: Metadata,
 }
 
 #[derive(Debug, Clone)]
@@ -40,7 +41,7 @@ pub struct VenvList {
 }
 
 impl Package {
-    pub fn new(name: &str, version: &str, size: u64, metadata: HashMap<String, String>) -> Self {
+    pub fn new(name: &str, version: &str, size: u64, metadata: Metadata) -> Self {
         Self {
             name: name.to_string(),
             version: version.to_string(),
@@ -113,32 +114,6 @@ impl VenvList {
             list_state: ListState::default().with_selected(Some(0)),
             scroll_state: ScrollbarState::new(venvs.len()),
             venvs,
-        }
-    }
-}
-
-impl FromIterator<(&'static str, Vec<&'static str>)> for VenvList {
-    fn from_iter<T: IntoIterator<Item = (&'static str, Vec<&'static str>)>>(iter: T) -> Self {
-        let items: Vec<_> = iter
-            .into_iter()
-            .map(|(name, packages)| {
-                Venv::new(
-                    name,
-                    "4.20".to_string(),
-                    420,
-                    packages
-                        .iter()
-                        .map(|package| Package::new(package, "", 0, HashMap::new()))
-                        .collect(),
-                    0,
-                    PathBuf::from_str("").unwrap(),
-                )
-            })
-            .collect();
-        Self {
-            scroll_state: ScrollbarState::new(items.len()),
-            venvs: items,
-            list_state: ListState::default(),
         }
     }
 }

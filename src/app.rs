@@ -42,38 +42,6 @@ pub enum Output {
     None,
 }
 
-impl Default for App {
-    fn default() -> Self {
-        Self {
-            running: true,
-            events: EventHandler::new(),
-            venv_dir: PathBuf::new(),
-            venv_index: 0,
-            venv_list: VenvList::from_iter([
-                (
-                    "ptvision",
-                    vec![
-                        "torch",
-                        "torchvision",
-                        "pandas",
-                        "numpy",
-                        "opencv",
-                        "pillow",
-                    ],
-                ),
-                (
-                    "nlp",
-                    vec!["torch", "nltk", "gensim", "pandas", "numpy", "scikit-learn"],
-                ),
-                ("async", vec!["asyncio", "aiortc", "requests"]),
-            ]),
-            current_focus: Panel::Venv,
-            packages_index: 0,
-            output: Output::None,
-        }
-    }
-}
-
 impl App {
     /// Constructs a new instance of [`App`].
     pub fn new(venv_path: PathBuf) -> Self {

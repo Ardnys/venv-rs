@@ -26,12 +26,12 @@ scope may change as well so even take this README with a generous sprinkle of to
 - [x] print the requirements.txt
 - [x] remove anyhow
 - [ ] custom activation encouragement with shell detection 
-- [ ] parse package dependencies
+- [x] parse package dependencies
     - [ ] add them to the package size
-    - [ ] show dependencies in UI
+    - [x] show dependencies in UI
     - [ ] (extra) tree view
-- [ ] popup confirmation as a flag
 - [ ] windows compatibility
+- [ ] popup confirmation as a flag
 - [ ] config file
 - [ ] walk the directory tree and look for .env folders. that way i don't have to limit to this particular workflow.
 
