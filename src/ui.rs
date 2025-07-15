@@ -5,7 +5,7 @@ use ratatui::{
     text::{Line, Span, Text},
     widgets::{
         Block, Borders, HighlightSpacing, List, ListItem, Padding, Paragraph, Scrollbar,
-        ScrollbarOrientation, StatefulWidget, Widget,
+        ScrollbarOrientation, StatefulWidget, Widget, block::title,
     },
 };
 use venv_rs::dir_size::{Chonk, ParallelReader};
@@ -137,11 +137,21 @@ impl App {
             });
 
         let mut v = self.get_selected_venv();
+        let style = Style::default();
+        let no_dependency_style = Style::default().magenta().italic();
 
         let items: Vec<ListItem> = v
             .packages
             .iter()
-            .map(|pack| ListItem::from(pack.name.clone()))
+            .map(|pack| {
+                let mut item = ListItem::from(pack.name.clone());
+                if pack.metadata.depedencies.is_none() {
+                    item = item.style(no_dependency_style);
+                } else {
+                    item = item.style(style);
+                }
+                item
+            })
             .collect();
 
         let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
@@ -193,6 +203,17 @@ impl App {
                 format!("Size: {}", ParallelReader::formatted_size(package.size)),
                 style,
             )),
+            if package.metadata.depedencies.is_some() {
+                Line::from(Span::styled(
+                    format!(
+                        "Num Dependencies: {}",
+                        package.metadata.depedencies.unwrap().len()
+                    ),
+                    style,
+                ))
+            } else {
+                Line::from("")
+            },
         ];
 
         let p = Paragraph::new(details)
@@ -210,6 +231,7 @@ impl App {
 
         let package = self.get_selected_package();
         let style = Style::new().red().bold();
+        let no_dep_style = Style::new().magenta().italic();
 
         let deps: Vec<Line> = package
             .metadata
@@ -220,7 +242,7 @@ impl App {
             .collect();
 
         let p = if deps.is_empty() {
-            Paragraph::new(Text::styled("! No Dependencies !", style))
+            Paragraph::new(Text::styled("! No Dependencies !", no_dep_style))
         } else {
             Paragraph::new(deps)
         };
