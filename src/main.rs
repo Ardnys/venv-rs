@@ -1,7 +1,9 @@
 use app::Output;
 use clap::Parser;
-use color_eyre::owo_colors::OwoColorize;
+use color_eyre::{eyre::Context, owo_colors::OwoColorize};
 use commands::Cli;
+use venv::{Venv, parser::parse_from_dir};
+use venv_search::search_venvs;
 
 use crate::app::App;
 
@@ -12,6 +14,7 @@ pub mod event;
 pub mod settings;
 pub mod ui;
 pub mod venv;
+pub mod venv_search;
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
@@ -19,36 +22,49 @@ fn main() -> color_eyre::Result<()> {
     let cli = Cli::parse();
 
     // TODO: unwrap or default to config ?
-    // let venvs_dir = cli.venvs_dir.as_deref();
-    if let Some(venvs_dir) = cli.venvs_dir.as_deref() {
-        // println!("Virtual environment directory: {}", venvs_dir.display());
+    // println!("Virtual environment directory: {}", venvs_dir.display());
 
-        // Venv::from_venvs_dir(venvs_dir)?;
-        let terminal = ratatui::init();
-        let app = App::new(venvs_dir.to_owned());
-        let result = app.run(terminal);
-        ratatui::restore();
+    let kind = cli.kind;
+    // TODO: tbh these paths could use Cow maybe?? I allocate a lot of memory for the same path
+    let vec_venvs = match kind {
+        commands::Kind::Venv { path } => [path]
+            .iter()
+            .filter_map(|p| parse_from_dir(p).ok())
+            .collect(),
+        commands::Kind::Search { path } => search_venvs(path)
+            .iter()
+            .filter_map(|p| parse_from_dir(p).ok())
+            .collect(),
+        commands::Kind::Venvs { path } => Venv::from_venvs_dir(&path).wrap_err_with(|| {
+            format!(
+                "Error while reading venvs directory: {}",
+                path.to_string_lossy()
+            )
+        })?,
+    };
+    // Venv::from_venvs_dir(venvs_dir)?;
+    let terminal = ratatui::init();
+    let app = App::new(vec_venvs);
+    let result = app.run(terminal);
+    ratatui::restore();
 
-        let output = result?;
-        match output {
-            Output::VenvPath(path_buf) => {
-                let path_str = path_buf.to_string_lossy();
+    let output = result?;
+    match output {
+        Output::VenvPath(path_buf) => {
+            let path_str = path_buf.to_string_lossy();
 
-                println!(
-                    "{}\n\n  {} {}\n",
-                    "  🐍 To activate your virtualenv:".bold().green(),
-                    "source".yellow().bold(),
-                    path_str.bold()
-                );
-            }
-            Output::Requirements(s) => println!("{}", s),
-            Output::None => {}
+            println!(
+                "{}\n\n  {} {}\n",
+                "  🐍 To activate your virtualenv:".bold().green(),
+                "source".yellow().bold(),
+                path_str.bold()
+            );
         }
-
-        Ok(())
-    } else {
-        Ok(())
+        Output::Requirements(s) => println!("{}", s),
+        Output::None => {}
     }
+
+    Ok(())
 }
 
 /*

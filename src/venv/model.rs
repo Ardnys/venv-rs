@@ -12,7 +12,6 @@ use crate::venv::parser::parse_from_dir;
 
 use super::parser::Metadata;
 
-// TODO: might add more details later
 #[derive(Debug, Clone)]
 pub struct Venv {
     pub name: String,
@@ -21,6 +20,7 @@ pub struct Venv {
     pub packages: Vec<Package>,
     pub num_dist_info_packages: i32,
     pub binaries: PathBuf,
+    pub path: PathBuf,
     pub list_state: ListState,
     pub scroll_state: ScrollbarState,
 }
@@ -59,6 +59,7 @@ impl Venv {
         packages: Vec<Package>,
         num_dist_info_packages: i32,
         binaries: PathBuf,
+        path: PathBuf,
     ) -> Self {
         Self {
             name: name.to_string(),
@@ -69,6 +70,7 @@ impl Venv {
             num_dist_info_packages,
             list_state: ListState::default().with_selected(Some(0)),
             binaries,
+            path,
         }
     }
 

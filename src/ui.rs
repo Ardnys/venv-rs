@@ -5,7 +5,7 @@ use ratatui::{
     text::{Line, Span, Text},
     widgets::{
         Block, Borders, HighlightSpacing, List, ListItem, Padding, Paragraph, Scrollbar,
-        ScrollbarOrientation, StatefulWidget, Widget, block::title,
+        ScrollbarOrientation, StatefulWidget, Widget,
     },
 };
 use venv_rs::dir_size::{Chonk, ParallelReader};

@@ -18,8 +18,6 @@ pub struct App {
     pub events: EventHandler,
     /// List of virtual environments
     pub venv_list: VenvList,
-    /// Path of virtual environments directory
-    pub venv_dir: PathBuf,
     pub venv_index: usize,
     pub packages_index: usize,
     pub current_focus: Panel,
@@ -44,15 +42,13 @@ pub enum Output {
 
 impl App {
     /// Constructs a new instance of [`App`].
-    pub fn new(venv_path: PathBuf) -> Self {
+    pub fn new(venvs: Vec<Venv>) -> Self {
         Self {
             running: true,
             events: EventHandler::new(),
-            venv_list: VenvList::new(
-                Venv::from_venvs_dir(&venv_path)
-                    .expect("Could not create VenvList because of an error from Venv"),
-            ),
-            venv_dir: venv_path,
+            // TODO: constructor should receive the venv_list.
+            // it does not care about how venv_list is created
+            venv_list: VenvList::new(venvs),
             venv_index: 0,
             current_focus: Panel::Venv,
             packages_index: 0,

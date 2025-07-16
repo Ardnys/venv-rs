@@ -25,6 +25,7 @@ scope may change as well so even take this README with a generous sprinkle of to
 - [x] _encourage_ activation on exit
 - [x] print the requirements.txt
 - [x] remove anyhow
+- [x] walk the directory tree and look for .env folders. that way i don't have to limit to this particular workflow.
 - [ ] custom activation encouragement with shell detection 
 - [x] parse package dependencies
     - [ ] add them to the package size
@@ -33,7 +34,6 @@ scope may change as well so even take this README with a generous sprinkle of to
 - [ ] windows compatibility
 - [ ] popup confirmation as a flag
 - [ ] config file
-- [ ] walk the directory tree and look for .env folders. that way i don't have to limit to this particular workflow.
 
 [Ratatui]: https://ratatui.rs
 

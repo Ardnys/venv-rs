@@ -279,6 +279,7 @@ pub fn parse_from_dir(dir: &Path) -> Result<Venv> {
             packages,
             num_pkg,
             binaries,
+            dir.to_path_buf(),
         );
         Ok(v)
     }

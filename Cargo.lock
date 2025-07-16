@@ -1543,6 +1543,7 @@ dependencies = [
  "rayon",
  "serde_derive",
  "shellexpand",
+ "walkdir",
 ]
 
 [[package]]
