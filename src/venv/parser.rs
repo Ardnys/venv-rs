@@ -209,7 +209,7 @@ pub fn parse_from_dir(dir: &Path) -> Result<Venv> {
 
         for (pkg, dist_info) in &pairs {
             // println!("Pkg: {}", pkg.to_str().unwrap());
-            let metadata_map = if let Some(d) = dist_info {
+            let metadata = if let Some(d) = dist_info {
                 match parse_metadata(d.to_path_buf())
                     .with_context(|| format!("Failed to parse metadata at {}", d.display()))
                 {
@@ -258,10 +258,10 @@ pub fn parse_from_dir(dir: &Path) -> Result<Venv> {
             };
 
             let package = Package::new(
-                &metadata_map.name,
-                &metadata_map.version,
+                &metadata.name,
+                &metadata.version,
                 package_size + dist_info_size,
-                metadata_map.clone(),
+                metadata.clone(),
             );
             // println!("pck: {:?}", package);
 

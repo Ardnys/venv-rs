@@ -34,6 +34,8 @@ scope may change as well so even take this README with a generous sprinkle of to
 - [ ] windows compatibility
 - [ ] popup confirmation as a flag
 - [ ] config file
+    - [ ] configure which shells are printed
+    - [ ] configure table printing or plain text printing
 
 [Ratatui]: https://ratatui.rs
 

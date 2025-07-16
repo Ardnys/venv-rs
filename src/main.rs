@@ -1,6 +1,7 @@
 use app::Output;
 use clap::Parser;
-use color_eyre::{eyre::Context, owo_colors::OwoColorize};
+use color_eyre::eyre::Context;
+use comfy_table::create_comfy_table;
 use commands::Cli;
 use venv::{Venv, parser::parse_from_dir};
 use venv_search::search_venvs;
@@ -8,6 +9,7 @@ use venv_search::search_venvs;
 use crate::app::App;
 
 pub mod app;
+pub mod comfy_table;
 pub mod commands;
 pub mod dir_size;
 pub mod event;
@@ -53,12 +55,16 @@ fn main() -> color_eyre::Result<()> {
         Output::VenvPath(path_buf) => {
             let path_str = path_buf.to_string_lossy();
 
-            println!(
-                "{}\n\n  {} {}\n",
-                "  🐍 To activate your virtualenv:".bold().green(),
-                "source".yellow().bold(),
-                path_str.bold()
-            );
+            let table = create_comfy_table(path_str);
+
+            println!("{table}");
+            // println!(
+            //     "{}\n\n {}  {} {}\n",
+            //     "  🐍 To activate your virtualenv:".bold().green(),
+            //     "  Linux".yellow().bold(),
+            //     "source".bold(),
+            //     path_str.bold(),
+            // );
         }
         Output::Requirements(s) => println!("{}", s),
         Output::None => {}
