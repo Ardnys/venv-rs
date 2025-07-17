@@ -145,7 +145,7 @@ impl App {
             .iter()
             .map(|pack| {
                 let mut item = ListItem::from(pack.name.clone());
-                if pack.metadata.depedencies.is_none() {
+                if pack.metadata.dependencies.is_none() {
                     item = item.style(no_dependency_style);
                 } else {
                     item = item.style(style);
@@ -203,11 +203,11 @@ impl App {
                 format!("Size: {}", ParallelReader::formatted_size(package.size)),
                 style,
             )),
-            if package.metadata.depedencies.is_some() {
+            if package.metadata.dependencies.is_some() {
                 Line::from(Span::styled(
                     format!(
                         "Num Dependencies: {}",
-                        package.metadata.depedencies.unwrap().len()
+                        package.metadata.dependencies.unwrap().len()
                     ),
                     style,
                 ))
@@ -235,7 +235,7 @@ impl App {
 
         let deps: Vec<Line> = package
             .metadata
-            .depedencies
+            .dependencies
             .unwrap_or_default()
             .iter()
             .map(|d| Line::from(Span::styled(d.to_string(), style)))

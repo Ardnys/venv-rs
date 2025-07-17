@@ -24,7 +24,6 @@ pub fn package_pairs(
     dist_infos: Vec<PathBuf>,
     packages: Vec<PathBuf>,
 ) -> Vec<(Option<PathBuf>, Option<PathBuf>)> {
-    // TODO: this ain't working that well anymore
     let mut pairs = Vec::with_capacity(packages.len());
 
     for pkg in packages.into_iter() {

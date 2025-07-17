@@ -214,11 +214,11 @@ impl App {
     pub fn update_package_index(&mut self) {
         let current_venv = self.get_selected_venv_ref();
         if let Some(i) = current_venv.list_state.selected() {
-            if i >= current_venv.packages.len() {
-                self.select_first();
-                return;
-            } else if i == usize::MAX {
+            if i == usize::MAX {
                 self.select_last();
+                return;
+            } else if i >= current_venv.packages.len() {
+                self.select_first();
                 return;
             }
             self.packages_index = i;

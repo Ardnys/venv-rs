@@ -26,7 +26,7 @@ pub struct Metadata {
     pub name: String,
     pub version: String,
     pub summary: String,
-    pub depedencies: Option<HashSet<String>>,
+    pub dependencies: Option<HashSet<String>>,
 }
 
 #[derive(Default)]
@@ -34,7 +34,7 @@ pub struct MetadataBuilder {
     pub name: Option<String>,
     pub version: Option<String>,
     pub summary: Option<String>,
-    pub depedencies: Option<HashSet<String>>,
+    pub dependencies: Option<HashSet<String>>,
 }
 
 impl MetadataBuilder {
@@ -43,7 +43,7 @@ impl MetadataBuilder {
             name: None,
             version: None,
             summary: None,
-            depedencies: None,
+            dependencies: None,
         }
     }
     pub fn name(&mut self, name: String) -> &mut Self {
@@ -59,7 +59,7 @@ impl MetadataBuilder {
         self
     }
     pub fn add_dependencies(&mut self, dependencies: HashSet<String>) -> &mut Self {
-        self.depedencies = Some(dependencies);
+        self.dependencies = Some(dependencies);
         self
     }
     pub fn build(&mut self) -> Metadata {
@@ -67,7 +67,7 @@ impl MetadataBuilder {
             name: self.name.clone().unwrap_or_default(),
             version: self.version.clone().unwrap_or_default(),
             summary: self.summary.clone().unwrap_or_default(),
-            depedencies: self.depedencies.clone(),
+            dependencies: self.dependencies.clone(),
         }
     }
 }
@@ -90,6 +90,7 @@ impl Metadata {
         if !dependencies.is_empty() {
             builder.add_dependencies(dependencies);
         }
+        // TODO: don't build yet (cus dependencies)
         let md = builder.build();
         Ok(md)
     }
@@ -164,6 +165,7 @@ pub fn parse_metadata(dist_info_path: PathBuf) -> Result<Metadata> {
 
     let metadata = Metadata::parse_tokens(tokens)?;
 
+    // TODO: return the builder because we are not done with dependencies yet
     Ok(metadata)
 }
 // expects dir to be a virtual environment
@@ -203,70 +205,8 @@ pub fn parse_from_dir(dir: &Path) -> Result<Venv> {
         }
 
         let pairs = package_pairs(dist_info_packages, package_dirs);
-
-        let mut packages: Vec<Package> = Vec::new();
-        let mut num_pkg = 0;
-
-        for (pkg, dist_info) in &pairs {
-            // println!("Pkg: {}", pkg.to_str().unwrap());
-            let metadata = if let Some(d) = dist_info {
-                match parse_metadata(d.to_path_buf())
-                    .with_context(|| format!("Failed to parse metadata at {}", d.display()))
-                {
-                    Ok(m) => {
-                        num_pkg += 1;
-                        m
-                    }
-                    Err(err) => {
-                        eprintln!(
-                            "{} {}: {:#}",
-                            "error parsing metadata for".red().bold(),
-                            d.display().yellow(),
-                            err.red().italic()
-                        );
-                        MetadataBuilder::default().build()
-                    }
-                }
-            } else {
-                continue;
-                // MetadataBuilder::default().build()
-            };
-
-            let package_size = if let Some(p) = pkg {
-                match dir_size::ParallelReader.get_dir_size(p) {
-                    Ok(sz) => sz,
-                    Err(err) => {
-                        eprintln!(
-                            "{} {}: {:#}",
-                            "Error while calculating size: ".red().bold(),
-                            p.display().yellow(),
-                            err.red().italic()
-                        );
-                        0
-                    }
-                }
-            } else {
-                0
-            };
-
-            let dist_info_size = if let Some(d) = dist_info {
-                dir_size::ParallelReader
-                    .get_dir_size(d)
-                    .context("Could not get dist-info size")?
-            } else {
-                0
-            };
-
-            let package = Package::new(
-                &metadata.name,
-                &metadata.version,
-                package_size + dist_info_size,
-                metadata.clone(),
-            );
-            // println!("pck: {:?}", package);
-
-            packages.push(package);
-        }
+        let (packages, num_pkg) =
+            parse_package_pairs(pairs).context("Error while parsing pairs")?;
 
         let venv_size = dir_size::ParallelReader
             .get_dir_size(dir)
@@ -284,3 +224,84 @@ pub fn parse_from_dir(dir: &Path) -> Result<Venv> {
         Ok(v)
     }
 }
+
+fn parse_package_pairs(
+    pairs: Vec<(Option<PathBuf>, Option<PathBuf>)>,
+) -> Result<(Vec<Package>, i32)> {
+    let mut packages: Vec<Package> = Vec::new();
+    let mut num_pkg = 0;
+
+    for (pkg, dist_info) in &pairs {
+        // println!("Pkg: {}", pkg.to_str().unwrap());
+        let metadata = if let Some(d) = get_metadata(&dist_info) {
+            num_pkg += 1;
+            d
+        } else {
+            continue;
+        };
+
+        let package_size = get_package_size(&pkg);
+
+        let dist_info_size = if let Some(d) = dist_info {
+            dir_size::ParallelReader
+                .get_dir_size(d)
+                .context("Could not get dist-info size")?
+        } else {
+            0
+        };
+
+        let package = Package::new(
+            &metadata.name,
+            &metadata.version,
+            package_size + dist_info_size,
+            metadata.clone(),
+        );
+        // println!("pck: {:?}", package);
+
+        packages.push(package);
+    }
+    // TODO: after all packages are done, go through them again and insert their dependencies
+    Ok((packages, num_pkg))
+}
+
+fn get_metadata(dist_info: &Option<PathBuf>) -> Option<Metadata> {
+    if let Some(d) = dist_info {
+        match parse_metadata(d.to_path_buf())
+            .with_context(|| format!("Failed to parse metadata at {}", d.display()))
+        {
+            Ok(m) => Some(m),
+            Err(err) => {
+                eprintln!(
+                    "{} {}: {:#}",
+                    "error parsing metadata for".red().bold(),
+                    d.display().yellow(),
+                    err.red().italic()
+                );
+                Some(MetadataBuilder::default().build())
+            }
+        }
+    } else {
+        None
+    }
+}
+
+fn get_package_size(pkg: &Option<PathBuf>) -> u64 {
+    if let Some(p) = pkg {
+        match dir_size::ParallelReader.get_dir_size(p) {
+            Ok(sz) => sz,
+            Err(err) => {
+                eprintln!(
+                    "{} {}: {:#}",
+                    "Error while calculating size: ".red().bold(),
+                    p.display().yellow(),
+                    err.red().italic()
+                );
+                0
+            }
+        }
+    } else {
+        0
+    }
+}
+
+// fn insert_dependencies(packages: &Vec<Rc<Package>>) {}
