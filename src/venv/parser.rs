@@ -233,14 +233,14 @@ fn parse_package_pairs(
 
     for (pkg, dist_info) in &pairs {
         // println!("Pkg: {}", pkg.to_str().unwrap());
-        let metadata = if let Some(d) = get_metadata(&dist_info) {
+        let metadata = if let Some(d) = get_metadata(dist_info) {
             num_pkg += 1;
             d
         } else {
             continue;
         };
 
-        let package_size = get_package_size(&pkg);
+        let package_size = get_package_size(pkg);
 
         let dist_info_size = if let Some(d) = dist_info {
             dir_size::ParallelReader

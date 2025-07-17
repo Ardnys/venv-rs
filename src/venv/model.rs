@@ -17,7 +17,7 @@ pub struct Venv {
     pub name: String,
     pub version: String,
     pub size: u64,
-    pub packages: Vec<Package>,
+    pub packages: Vec<Package>, // Vec<Rc<Package>>
     pub num_dist_info_packages: i32,
     pub binaries: PathBuf,
     pub path: PathBuf,
