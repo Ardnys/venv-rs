@@ -1,22 +1,43 @@
-name: 📦 Release
-
-permissions:
-  contents: write
+name: Release
 
 on:
- push:
+  push:
     tags:
-      - '**[0-9]+.[0-9]+.[0-9]+*'
-    branches:
-      - main
+      - 'v*' # Trigger on version tags
+
+env:
+  CARGO_TERM_COLOR: always
+  BINARY_NAME: venv-rs # Your binary name
 
 jobs:
-  build:
+  release:
+    name: Release for Linux x86_64
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Release
-        uses: softprops/action-gh-release@v2
-        if: github.ref_type == 'tag'
 
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Build Release Binary
+        run: |
+          cargo build --release --target x86_64-unknown-linux-gnu
+          
+      - name: Package Binary
+        run: |
+          cd target/x86_64-unknown-linux-gnu/release
+          tar -czf ${{ env.BINARY_NAME }}-linux-x86_64.tar.gz ${{ env.BINARY_NAME }}
+          
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            target/x86_64-unknown-linux-gnu/release/${{ env.BINARY_NAME }}-linux-x86_64.tar.gz
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
