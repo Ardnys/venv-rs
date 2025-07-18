@@ -61,7 +61,6 @@ jobs:
             ## Changelog
             - Short bullet list of changes...
           draft: false
-          prerelease: ${{ contains(env.RELEASE_NAME, "beta") || contains(env.RELEASE_NAME, "alpha") }}
 
       - name: Upload Release Asset
         uses: actions/upload-release-asset@v2
