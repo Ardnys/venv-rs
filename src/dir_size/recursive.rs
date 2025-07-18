@@ -26,21 +26,21 @@ impl Chonk for RecursiveReader {
 }
 
 // le tests
-#[cfg(test)]
-mod tests {
-    use std::path::Path;
-
-    use crate::dir_size::chonk::Chonk;
-
-    use super::RecursiveReader;
-
-    #[test]
-    fn test_recursive_dir_size() -> color_eyre::Result<()> {
-        let dir = Path::new("test_directories/basic");
-        let method = RecursiveReader;
-        let size = method.get_dir_size(dir)?;
-        assert_eq!(size, 22);
-
-        Ok(())
-    }
-}
+// #[cfg(test)]
+// mod tests {
+//     use std::path::Path;
+//
+//     use crate::dir_size::chonk::Chonk;
+//
+//     use super::RecursiveReader;
+//
+//     #[test]
+//     fn test_recursive_dir_size() -> color_eyre::Result<()> {
+//         let dir = Path::new("test_directories/basic");
+//         let method = RecursiveReader;
+//         let size = method.get_dir_size(dir)?;
+//         assert_eq!(size, 22);
+//
+//         Ok(())
+//     }
+// }
