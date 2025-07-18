@@ -263,6 +263,10 @@ impl App {
             Line::from(Span::styled(format!("Name:     {}", venv.name), style)),
             Line::from(Span::styled(format!("Version:  {}", venv.version), style)),
             Line::from(Span::styled(
+                format!("Path:  {}", venv.path.to_string_lossy()),
+                style,
+            )),
+            Line::from(Span::styled(
                 format!("# of Pkg: {}", venv.num_dist_info_packages),
                 style,
             )),

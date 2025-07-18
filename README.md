@@ -29,7 +29,7 @@ scope may change as well so even take this README with a generous sprinkle of to
 - [x] parse package dependencies
     - [ ] add them to the package size
     - [x] show dependencies in UI
-    - [ ] (extra) tree view
+    - [ ] consider extra features and which dependencies they add
 - [ ] windows compatibility
 - [ ] popup confirmation as a flag
 - [ ] config file
