@@ -1,87 +1,37 @@
 name: 📦 Release
-permissions:
-  "contents": "write"
 
-# 1) When you push a tag like "v1.2.3"
 on:
-  push:
-    branches:
-      - main
+ push:
     tags:
       - '**[0-9]+.[0-9]+.[0-9]+*'
-
-env:
-  # Match the version in Cargo.toml, or override via tag name
-  # You could also use a GitHub Action to bump your Cargo.toml version from the tag.
-  RELEASE_NAME: ${{ github.ref_name }}
-  BIN_NAME: venv-rs
+    branches:
+      - main
 
 jobs:
-  # 2) Create the GitHub Release
-  create_release:
+  release:
+    name: Build & Publish ${{ matrix.target }}
     runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
-    steps:
-      - name: Create GitHub Release
-        id: create_release
-        uses: actions/create-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          release_name: Release ${{ github.ref_name }}
-          body: |
-            📝 Changelog for ${{ github.ref_name }}
-            - Describe your changes here.
-          draft: false
-          prerelease: false
-
-  # 3) Build + package + upload for each platform
-  build_and_upload:
-    needs: create_release
-    runs-on: ${{ matrix.runner }}
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - runner: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            archive_ext: tar.gz
-          # don't care about macos rn 
-          # - runner: macos-latest
-          #   target: x86_64-apple-darwin
-          #   archive_ext: zip
-          - runner: windows-latest
-            target: x86_64-pc-windows-msvc
-            archive_ext: zip
+          - target: x86_64-pc-windows-gnu
+            archive: zip
+          - target: x86_64-unknown-linux-musl
+            archive: tar.gz tar.xz tar.zst
+          - target: x86_64-apple-darwin
+            archive: zip
 
     steps:
-      - name: Checkout code
+      # 1) Check out your code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      # 2) Build & archive using rust-build.action
+      - name: Compile & archive (${{ matrix.target }})
+        uses: rust-build/rust-build.action@v1.4.5
+        env:
+          RUSTTARGET: ${{ matrix.target }}
+          ARCHIVE_TYPES: ${{ matrix.archive }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build (release) for ${{ matrix.target }}
-        run: |
-          rustup target add ${{ matrix.target }}
-          cargo build --release --target ${{ matrix.target }} --locked
-
-      - name: Package artifact
-        run: |
-          mkdir -p dist
-          BIN=${{ env.BIN_NAME }}${{ env.RELEASE_NAME}}${{ matrix.target == 'x86_64-pc-windows-msvc' && '.exe' || '' }}
-          SRC=target/${{ matrix.target }}/release/${BIN}
-          DST=dist/${BIN}-${{ matrix.target }}.${{ matrix.archive_ext }}
-
-          if [ "${{ matrix.archive_ext }}" = "zip" ]; then
-            mkdir tmp && cp "$SRC" tmp/ && cd tmp && zip -r "../${DST}" . && cd ..
-          else
-            tar -czf "${DST}" -C "$(dirname "$SRC")" "$(basename "$SRC")"
-          fi
-
-      - name: Upload Release Asset (${{ matrix.target }})
-        uses: actions/upload-release-asset@v2
-        with:
-          upload_url: ${{ needs.create_release.outputs.upload_url }}
-          asset_path: dist
-          asset_name: ${{ matrix.target }}.${{ matrix.archive_ext }}
-          asset_content_type: application/octet-stream
