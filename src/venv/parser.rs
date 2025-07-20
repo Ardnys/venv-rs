@@ -611,15 +611,24 @@ command = /usr/local/bin/python3 -m venv /home/user/projects/python/imgs/fdmp
         write!(pyvenv_cfg, "{pyvenv_cfg_contents}").unwrap();
 
         // Create directory structure
-        let bin_dir = if cfg!(windows) {
+        let is_windows = cfg!(windows);
+        let bin_dir = if is_windows {
             venv_dir.path().join("Scripts")
         } else {
             venv_dir.path().join("bin")
         };
-        let lib_dir = venv_dir.path().join("lib");
-        // TODO: Scripts/ for windows
-        let python_dir = lib_dir.join("python3.13");
-        let site_packages = python_dir.join("site-packages");
+        let lib_dir = if is_windows {
+            venv_dir.path().join("Lib")
+        } else {
+            venv_dir.path().join("lib")
+        };
+
+        let site_packages = if is_windows {
+            lib_dir.join("site-packages")
+        } else {
+            let python_dir = lib_dir.join("python3.13");
+            python_dir.join("site-packages")
+        };
         fs::create_dir_all(&site_packages).unwrap();
 
         // Create a package (pip is automatically generated for example)
