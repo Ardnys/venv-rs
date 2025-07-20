@@ -4,6 +4,7 @@ use crate::{
     event::{AppEvent, Event, EventHandler},
     venv::{Venv, VenvList, model::Package},
 };
+use crossterm::event::KeyEventKind;
 use ratatui::{
     DefaultTerminal,
     crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
@@ -108,6 +109,12 @@ impl App {
 
     /// Handles the key events and updates the state of [`App`].
     pub fn handle_key_event(&mut self, key_event: KeyEvent) -> color_eyre::Result<()> {
+        if key_event.kind != KeyEventKind::Press {
+            // return early for Release and Repeat
+            // Windows handles release as well
+            return Ok(());
+        }
+
         match key_event.code {
             KeyCode::Esc | KeyCode::Char('q') => self.events.send(AppEvent::Quit),
             KeyCode::Char('c' | 'C') if key_event.modifiers == KeyModifiers::CONTROL => {

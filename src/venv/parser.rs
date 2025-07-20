@@ -203,11 +203,22 @@ pub fn parse_from_dir(dir: &Path) -> Result<Venv> {
 
         // println!("Binary directory: {}", binaries.to_str().unwrap());
 
-        let lib_dir = dir.join("lib");
+        let lib_dir = if is_windows {
+            dir.join("Lib")
+        } else {
+            dir.join("lib")
+        };
 
-        let python_dir = get_python_dir(lib_dir)?
-            .ok_or_else(|| eyre::eyre!("Could not find python version directory under '/lib'"))?;
-        let site_packages = python_dir.join("site-packages");
+        let site_packages = if is_windows {
+            lib_dir.join("site-packages")
+        } else {
+            let python_dir = get_python_dir(lib_dir)?.ok_or_else(|| {
+                eyre::eyre!("Could not find python version directory under '/lib'")
+            })?;
+            python_dir.join("site-packages")
+        };
+
+        // println!("{}", site_packages.to_string_lossy());
         let (dist_info_packages, package_dirs) =
             get_packages(site_packages).wrap_err("Could not read 'dist-info' directories")?;
 

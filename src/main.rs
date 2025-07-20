@@ -44,7 +44,6 @@ fn main() -> color_eyre::Result<()> {
             )
         })?,
     };
-    // Venv::from_venvs_dir(venvs_dir)?;
     let terminal = ratatui::init();
     let app = App::new(vec_venvs);
     let result = app.run(terminal);

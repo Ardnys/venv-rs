@@ -85,7 +85,13 @@ impl Venv {
         let venvs: Vec<Self> = fs::read_dir(path)?
             .filter_map(Result::ok)
             .map(|venv| venv.path())
-            .filter_map(|v_pb| parse_from_dir(&v_pb).ok())
+            .filter_map(|v_pb| match parse_from_dir(&v_pb) {
+                Ok(venv) => Some(venv),
+                Err(err) => {
+                    eprintln!("Failed to parse venv at {}: {:#}", v_pb.display(), err);
+                    None
+                }
+            })
             .collect();
 
         Ok(venvs)
