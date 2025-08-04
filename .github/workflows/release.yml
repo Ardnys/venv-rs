@@ -87,7 +87,6 @@ jobs:
     name: Upload release
     needs: 
       - build
-      - publish
     runs-on: ubuntu-latest
 
     steps:
