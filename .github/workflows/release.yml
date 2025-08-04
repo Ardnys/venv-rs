@@ -1,49 +1,102 @@
-# name: Release
+name: Release
 
-# on:
-#   push:
-#     tags:
-#      - '**[0-9]+.[0-9]+.[0-9]+*' # Trigger on version tags
-#     branches:
-#       - main
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
 
-# permissions:
-#   contents: write # This is required for creating releases
+# We need this to be able to create releases.
+permissions:
+  contents: write
 
-# env:
-#   CARGO_TERM_COLOR: always
-#   BINARY_NAME: venv-rs # Your binary name
+jobs:
+  build:
+    name: Build
+    runs-on: ${{ matrix.os }}
 
-# jobs:
-#   release:
-#     name: Release for Linux x86_64
-#     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - build: linux
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          - build: macos
+            os: macos-latest
+            target: x86_64-apple-darwin
+          - build: windows-gnu
+            os: windows-latest
+            target: x86_64-pc-windows-gnu
 
-#     steps:
-#       - uses: actions/checkout@v4
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
 
-#       - name: Install Rust toolchain
-#         uses: dtolnay/rust-toolchain@stable
-#         with:
-#           targets: x86_64-unknown-linux-gnu
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
 
-#       - name: Build Release Binary
-#         run: |
-#           cargo build --release --target x86_64-unknown-linux-gnu
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
 
-#       - name: Package Binary
-#         run: |
-#           cd target/x86_64-unknown-linux-gnu/release
-#           tar -czf ${{ env.BINARY_NAME }}-linux-x86_64.tar.gz ${{ env.BINARY_NAME }}
+      - name: Get the release version from the tag
+        id: get_version
+        shell: bash
+        run: echo "version=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
 
-#       - name: Create Release
-#         uses: softprops/action-gh-release@v2
-#         if: github.ref_type == 'tag'
-#         with:
-#           files: |
-#             target/x86_64-unknown-linux-gnu/release/${{ env.BINARY_NAME }}-linux-x86_64.tar.gz
-#           draft: false
-#           prerelease: false
-#           generate_release_notes: true
-#         env:
-#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build
+        run: cargo build --verbose --release --target ${{ matrix.target }}
+
+      - name: Build archive
+        id: build_archive
+        shell: bash
+        run: |
+          binary_name="venv-rs"
+          dirname="$binary_name-${{ steps.get_version.outputs.version }}-${{ matrix.target }}"
+          mkdir -p "$dirname"
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            mv "target/${{ matrix.target }}/release/$binary_name.exe" "$dirname"
+            7z a "$dirname.zip" "$dirname"
+            echo "asset=$dirname.zip" >> "$GITHUB_OUTPUT"
+          else
+            mv "target/${{ matrix.target }}/release/$binary_name" "$dirname"
+            tar -czf "$dirname.tar.gz" "$dirname"
+            echo "asset=$dirname.tar.gz" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate checksum
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            certutil -hashfile ${{ steps.build_archive.outputs.asset }} > "${{ steps.build_archive.outputs.asset }}.sha256"
+          else
+            shasum -a 256 "${{ steps.build_archive.outputs.asset }}" > "${{ steps.build_archive.outputs.asset }}.sha256"
+          fi
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: |
+            ${{ steps.build_archive.outputs.asset }}
+            ${{ steps.build_archive.outputs.asset }}.sha256
+
+  upload:
+    name: Upload release
+    needs: 
+      - build
+      - publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Upload the binaries
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
