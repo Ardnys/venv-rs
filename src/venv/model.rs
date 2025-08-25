@@ -99,11 +99,7 @@ impl Venv {
 
     pub fn activation_path(&self) -> PathBuf {
         // TODO: can i check what kind of shell is active?
-        // WARN: only supports linux rn
-        PathBuf::from_str(&self.name)
-            .unwrap()
-            .join(&self.binaries)
-            .join(PathBuf::from_str("activate").unwrap())
+        PathBuf::from_str(&self.name).unwrap().join(&self.binaries)
     }
 
     pub fn requirements(&self) -> PathBuf {

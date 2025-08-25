@@ -1,15 +1,20 @@
+use std::{
+    io::Write,
+    process::{Command, Stdio},
+};
+
 use app::Output;
+use arboard::Clipboard;
 use clap::Parser;
-use color_eyre::eyre::Context;
-use comfy_table::create_comfy_table;
+use color_eyre::{eyre::Context, owo_colors::OwoColorize};
 use commands::Cli;
+use settings::get_config;
 use venv::{Venv, parser::parse_from_dir};
 use venv_search::search_venvs;
 
 use crate::app::App;
 
 pub mod app;
-pub mod comfy_table;
 pub mod commands;
 pub mod dir_size;
 pub mod event;
@@ -23,8 +28,7 @@ fn main() -> color_eyre::Result<()> {
 
     let cli = Cli::parse();
 
-    // TODO: unwrap or default to config ?
-    // println!("Virtual environment directory: {}", venvs_dir.display());
+    let config = get_config().expect("Failed to get config");
 
     let kind = cli.kind;
     // TODO: tbh these paths could use Cow maybe?? I allocate a lot of memory for the same path
@@ -44,6 +48,7 @@ fn main() -> color_eyre::Result<()> {
             )
         })?,
     };
+    // TODO: config to run the TUI in stderr to allow pipes and stuff
     let terminal = ratatui::init();
     let app = App::new(vec_venvs);
     let result = app.run(terminal);
@@ -52,20 +57,49 @@ fn main() -> color_eyre::Result<()> {
     let output = result?;
     match output {
         Output::VenvPath(path_buf) => {
-            let path_str = path_buf.to_string_lossy();
+            let activation_command = config.shell.activation(path_buf.to_string_lossy());
 
-            let table = create_comfy_table(path_str);
+            if cfg!(target_os = "linux") {
+                if config.extra.use_xclip {
+                    println!(
+                        "{}\n\n {}",
+                        "  🐍 Activation command copied to clipboard:"
+                            .bold()
+                            .green(),
+                        activation_command.bold().yellow()
+                    );
+                    let mut xclip = Command::new("xclip")
+                        .args(["-selection", "clipboard"])
+                        .stdin(Stdio::piped())
+                        .spawn()?;
+                    if let Some(stdin) = xclip.stdin.as_mut() {
+                        stdin.write_all(activation_command.as_bytes())?;
+                    }
+                    xclip.wait()?;
+                } else {
+                    println!(
+                        "{}\n{}",
+                        "It looks like you don't have xclip enabled!".bold().red(),
+                        "You should install and enable it for the best user experience.".green(),
+                    );
 
-            println!("{table}");
-            // println!(
-            //     "{}\n\n {}  {} {}\n",
-            //     "  🐍 To activate your virtualenv:".bold().green(),
-            //     "  Linux".yellow().bold(),
-            //     "source".bold(),
-            //     path_str.bold(),
-            // );
+                    eprintln!("{activation_command}");
+                    // that's how i copy directly to clipboard lol isn't this cursed
+                    // cargo run -- venvs ~/.virtualenvs 2> >(xclip -selection clipboard)
+                    // Clipboard::new()?.set().wait().text(activation_command)?;
+                }
+            } else {
+                println!(
+                    "{}\n\n {}",
+                    "  🐍 Activation command copied to clipboard:"
+                        .bold()
+                        .green(),
+                    activation_command.bold().yellow()
+                );
+                Clipboard::new()?.set_text(activation_command)?;
+            }
         }
-        Output::Requirements(s) => println!("{}", s),
+        Output::Requirements(s) => println!("{s}"),
         Output::None => {}
     }
 

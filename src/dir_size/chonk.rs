@@ -10,6 +10,6 @@ pub trait Chonk {
             1_000_000_000..1_000_000_000_000 => (size / 1_000_000_000, "GiB"),
             _ => (size, "spring rolls"),
         };
-        format!("{} {}", num, suffix)
+        format!("{num} {suffix}")
     }
 }

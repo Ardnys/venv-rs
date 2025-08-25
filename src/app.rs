@@ -22,6 +22,7 @@ pub struct App {
     pub venv_index: usize,
     pub packages_index: usize,
     pub current_focus: Panel,
+    pub show_help: bool,
     output: Output,
 }
 
@@ -54,6 +55,7 @@ impl App {
             current_focus: Panel::Venv,
             packages_index: 0,
             output: Output::None,
+            show_help: false,
         }
     }
 
@@ -74,35 +76,41 @@ impl App {
                     self.handle_key_event(key_event)?
                 }
             }
-            Event::App(app_event) => match app_event {
-                AppEvent::Quit => self.quit(),
-                AppEvent::ScrollDown => self.select_next(),
-                AppEvent::ScrollUp => self.select_previuos(),
-                AppEvent::SwitchLeft => self.switch_left(),
-                AppEvent::SwitchRight => self.switch_right(),
-                AppEvent::SelectVenv => {
-                    let v = self.get_selected_venv_ref();
-                    let venv_path = v.activation_path();
-                    self.output = Output::VenvPath(venv_path);
-                    self.quit();
-                }
-                AppEvent::Requirements => {
-                    let v = self.get_selected_venv_ref();
-                    // TODO: terrible error handling here. fix it. probs show the error message in
-                    // the TUI
-                    // TODO: confirmation as well
-                    let python = v.requirements();
-                    let output = Command::new(python)
-                        .args(["-m", "pip", "freeze"])
-                        .output()?;
+            Event::App(app_event) => {
+                match app_event {
+                    AppEvent::Quit => self.quit(),
+                    AppEvent::ScrollDown => self.select_next(),
+                    AppEvent::ScrollUp => self.select_previuos(),
+                    AppEvent::SelectFirst => self.select_first(),
+                    AppEvent::SelectLast => self.select_last(),
+                    AppEvent::HalfPageUp => self.select_some_up(),
+                    AppEvent::HalfPageDown => self.select_some_down(),
+                    AppEvent::SwitchLeft => self.switch_left(),
+                    AppEvent::SwitchRight => self.switch_right(),
+                    AppEvent::SelectVenv => {
+                        let v = self.get_selected_venv_ref();
+                        let venv_path = v.activation_path();
+                        self.output = Output::VenvPath(venv_path);
+                        self.quit();
+                    }
+                    AppEvent::Requirements => {
+                        let v = self.get_selected_venv_ref();
+                        // TODO: terrible error handling here. fix it. probs show the error message in
+                        // the TUI
+                        // TODO: confirmation as well
+                        let python = v.requirements();
+                        let output = Command::new(python)
+                            .args(["-m", "pip", "freeze"])
+                            .output()?;
 
-                    let req = String::from_utf8(output.stdout)
-                        .expect("Could not create string from output.stdout");
+                        let req = String::from_utf8(output.stdout)
+                            .expect("Could not create string from output.stdout");
 
-                    self.output = Output::Requirements(req);
-                    self.quit();
+                        self.output = Output::Requirements(req);
+                        self.quit();
+                    }
                 }
-            },
+            }
         }
         Ok(Output::None)
     }
@@ -117,9 +125,24 @@ impl App {
 
         match key_event.code {
             KeyCode::Esc | KeyCode::Char('q') => self.events.send(AppEvent::Quit),
+            KeyCode::Char('?') => self.show_help = !self.show_help,
             KeyCode::Char('c' | 'C') if key_event.modifiers == KeyModifiers::CONTROL => {
                 self.events.send(AppEvent::Quit)
             }
+            KeyCode::Up if key_event.modifiers == KeyModifiers::CONTROL => {
+                self.events.send(AppEvent::SelectFirst)
+            }
+            KeyCode::Down if key_event.modifiers == KeyModifiers::CONTROL => {
+                self.events.send(AppEvent::SelectLast)
+            }
+            KeyCode::Char('d') if key_event.modifiers == KeyModifiers::CONTROL => {
+                self.events.send(AppEvent::HalfPageDown)
+            }
+            KeyCode::Char('u') if key_event.modifiers == KeyModifiers::CONTROL => {
+                self.events.send(AppEvent::HalfPageUp)
+            }
+            KeyCode::Char('K') => self.events.send(AppEvent::SelectFirst),
+            KeyCode::Char('J') => self.events.send(AppEvent::SelectLast),
             KeyCode::Up | KeyCode::Char('k') => self.events.send(AppEvent::ScrollUp),
             KeyCode::Down | KeyCode::Char('j') => self.events.send(AppEvent::ScrollDown),
             KeyCode::Right | KeyCode::Char('l') => self.events.send(AppEvent::SwitchRight),
@@ -159,9 +182,19 @@ impl App {
                 self.update_venv_index();
             }
             Panel::Packages => {
-                let current_venv = self.get_selected_venv_ref();
-                current_venv.list_state.select_next();
-                self.update_package_index();
+                // These are kinda ugly because inner list state would overflow.
+                let max = self
+                    .get_selected_venv_ref()
+                    .packages
+                    .len()
+                    .saturating_sub(1);
+
+                let next = self.packages_index.saturating_add(1).min(max);
+
+                let v = self.get_selected_venv_ref();
+                v.list_state.select(Some(next));
+
+                self.packages_index = next;
             }
         }
     }
@@ -198,8 +231,67 @@ impl App {
                 self.update_venv_index();
             }
             Panel::Packages => {
+                let last_index = self
+                    .get_selected_venv_ref()
+                    .packages
+                    .len()
+                    .saturating_sub(1);
+
                 let current_venv = self.get_selected_venv_ref();
-                current_venv.list_state.select_last();
+                current_venv.list_state.select(Some(last_index));
+                self.update_package_index();
+            }
+        }
+    }
+    pub fn select_some_down(&mut self) {
+        match self.current_focus {
+            Panel::Venv => {
+                let some_down = std::cmp::min(
+                    self.venv_index.saturating_add(5),
+                    self.venv_list.venvs.len().saturating_sub(1),
+                );
+
+                self.venv_list.list_state.select(Some(some_down));
+                self.update_venv_index();
+            }
+            Panel::Packages => {
+                let some_down = std::cmp::min(
+                    self.packages_index.saturating_add(5),
+                    self.get_selected_venv_ref()
+                        .packages
+                        .len()
+                        .saturating_sub(1),
+                );
+
+                let current_venv = self.get_selected_venv_ref();
+
+                current_venv.list_state.select(Some(some_down));
+                self.update_package_index();
+            }
+        }
+    }
+    pub fn select_some_up(&mut self) {
+        match self.current_focus {
+            Panel::Venv => {
+                let some_up = std::cmp::min(
+                    self.venv_index.saturating_sub(5),
+                    self.venv_list.venvs.len().saturating_sub(1),
+                );
+
+                self.venv_list.list_state.select(Some(some_up));
+                self.update_venv_index();
+            }
+            Panel::Packages => {
+                let some_up = std::cmp::min(
+                    self.packages_index.saturating_sub(5),
+                    self.get_selected_venv_ref()
+                        .packages
+                        .len()
+                        .saturating_sub(1),
+                );
+                let current_venv = self.get_selected_venv_ref();
+
+                current_venv.list_state.select(Some(some_up));
                 self.update_package_index();
             }
         }
@@ -207,10 +299,7 @@ impl App {
     pub fn update_venv_index(&mut self) {
         if let Some(i) = self.venv_list.list_state.selected() {
             if i >= self.venv_list.venvs.len() {
-                self.select_first();
-                return;
-            } else if i == usize::MAX {
-                self.select_last();
+                self.venv_index = self.venv_list.venvs.len() - 1;
                 return;
             }
             self.venv_index = i;
@@ -221,11 +310,8 @@ impl App {
     pub fn update_package_index(&mut self) {
         let current_venv = self.get_selected_venv_ref();
         if let Some(i) = current_venv.list_state.selected() {
-            if i == usize::MAX {
-                self.select_last();
-                return;
-            } else if i >= current_venv.packages.len() {
-                self.select_first();
+            if i >= current_venv.packages.len() {
+                self.packages_index = current_venv.packages.len().saturating_sub(1);
                 return;
             }
             self.packages_index = i;
