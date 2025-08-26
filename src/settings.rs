@@ -1,6 +1,7 @@
-use std::{borrow::Cow, fs, path::PathBuf};
+use std::{borrow::Cow, fs};
 
 use config::Config;
+use dirs::config_dir;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -60,20 +61,26 @@ impl TryFrom<String> for Shell {
 }
 
 pub fn get_config() -> Result<Settings, config::ConfigError> {
-    let is_windows = cfg!(windows);
-    let config_dir = if is_windows {
-        todo!()
-    } else {
-        let home_path_str = std::env::var("HOME").expect("HOME environment variable must be set");
-        PathBuf::from(home_path_str).join(".config").join("venv_rs")
-    };
+    let config_dir = config_dir()
+        .expect("Couldn't get config dir")
+        .join("venv_rs");
 
     fs::create_dir_all(config_dir.as_path())
         .expect("Could not create config directories for some reason");
 
-    let settings = Config::builder()
-        .set_default("shell", "zsh")?
-        .set_default("extra.use_xclip", true)?
+    let settings = Config::builder();
+
+    let settings = if cfg!(target_os = "linux") {
+        settings
+            .set_default("shell", "zsh")?
+            .set_default("extra.use_xclip", true)?
+    } else {
+        settings
+            .set_default("shell", "cmd")?
+            .set_default("extra.use_xclip", false)?
+    };
+
+    let settings = settings
         .add_source(config::File::from(config_dir.join("config.yaml")).required(false))
         .build()?;
 
