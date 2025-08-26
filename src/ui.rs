@@ -4,8 +4,8 @@ use ratatui::{
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span, Text},
     widgets::{
-        Block, Borders, HighlightSpacing, List, ListItem, Padding, Paragraph, Scrollbar,
-        ScrollbarOrientation, StatefulWidget, Widget,
+        Block, Borders, Clear, HighlightSpacing, List, ListItem, Padding, Paragraph, Scrollbar,
+        ScrollbarOrientation, StatefulWidget, Widget, Wrap,
     },
 };
 use venv_rs::dir_size::{Chonk, ParallelReader};
@@ -56,8 +56,9 @@ impl Widget for &mut App {
             .borders(Borders::empty())
             .padding(Padding::left(1));
 
-        let footer_text =
-            String::from("Exit: q | Movement: hjkl or arrow keys | Activate: a | Requirements: r");
+        let footer_text = String::from(
+            "Exit: q | Movement: hjkl or arrow keys | Activate: a | Requirements: r | Help: ?",
+        );
 
         let footer = Paragraph::new(footer_text)
             .block(footer_block)
@@ -71,10 +72,13 @@ impl Widget for &mut App {
         self.render_package_details(pkg_details, buf);
         self.render_package_dependencies(pkg_dependencies, buf);
         self.render_venv_details(venv_details_layout, buf);
+
+        if self.show_help {
+            self.render_help(area, buf);
+        }
     }
 }
 
-// TODO: Is there a way to that while respecting user's terminal colors ?
 // const fn alternate_colors(i: usize) -> Color {
 //     if i % 2 == 0 {
 //         NORMAL_ROW_BG
@@ -218,6 +222,7 @@ impl App {
 
         let p = Paragraph::new(details)
             .block(block)
+            .wrap(Wrap::default())
             .alignment(Alignment::Left);
 
         p.render(area, buf);
@@ -281,5 +286,182 @@ impl App {
             .alignment(Alignment::Left);
 
         p.render(area, buf);
+    }
+
+    fn render_help(&mut self, area: Rect, buf: &mut Buffer) {
+        // Create centered rect: 60% width, 70% height
+        let popup_area = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Percentage(15), // top padding
+                Constraint::Percentage(70), // help box
+                Constraint::Percentage(15), // bottom padding
+            ])
+            .split(area)[1];
+
+        let popup_area = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(20), // left padding
+                Constraint::Percentage(60), // help box
+                Constraint::Percentage(20), // right padding
+            ])
+            .split(popup_area)[1];
+
+        // Clear the part where help popup is rendered
+        Clear.render(popup_area, buf);
+
+        let block = Block::new()
+            .title(Line::styled(
+                " Help / Keybinds ",
+                Style::new().bold().yellow(),
+            ))
+            .borders(Borders::ALL)
+            .border_style(FOCUSED_PANEL_STYLE);
+
+        let actions: Vec<(&str, &str)> = vec![
+            ("q", "Exit"),
+            ("a", "Activate selected venv"),
+            ("r", "Print requirements and exit"),
+            ("?", "Toggle keybinds"),
+        ];
+
+        let navigations: Vec<(&str, &str)> = vec![
+            ("j / ↓", "Scroll down"),
+            ("k / ↑", "Scroll up"),
+            ("h / ←", "Switch to left pane"),
+            ("l / →", "Switch to right pane"),
+            ("Ctrl+d / PgDn", "Half page down"),
+            ("Ctrl+u / PgUp", "Half page up"),
+            ("J / Ctrl+↓", "Scroll last"),
+            ("K / Ctrl+↑", "Scroll first"),
+        ];
+
+        /* layout kinda looks like this
+                * ┌──────────────┐
+                  │action title  │
+                  └──────────────┘
+                  ┌──────┐┌──────┐
+                  │ key  ││ desc │
+                  │      ││      │
+                  │      ││      │
+                  │      ││      │
+                  └──────┘└──────┘
+                  ┌──────────────┐
+                  │navig title   │
+                  └──────────────┘
+                  ┌──────┐┌──────┐
+                  │ key  ││ desc │
+                  │      ││      │
+                  │      ││      │
+                  │      ││      │
+                  │      ││      │
+                  └──────┘└──────┘
+        */
+
+        let [
+            action_title_layout,
+            action_keybind_layout,
+            navigation_title_layout,
+            navigation_keybind_layout,
+            _,
+        ] = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Length(5),
+                Constraint::Length(3),
+                Constraint::Length(10),
+                Constraint::Fill(1),
+            ])
+            .areas(popup_area.inner(Margin {
+                vertical: 1,
+                horizontal: 2,
+            }));
+
+        let [action_key_layout, action_desc_layout] = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
+            .areas(action_keybind_layout);
+
+        let [navigation_key_layout, navigation_desc_layout] = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
+            .areas(navigation_keybind_layout);
+
+        // === Actions ===
+        let action_title = Paragraph::new(Text::styled(
+            "--- Actions ---",
+            Style::new().green().italic(),
+        ))
+        .alignment(Alignment::Left)
+        .block(Block::default().padding(Padding {
+            left: 1,
+            right: 1,
+            top: 1,
+            bottom: 0,
+        }));
+
+        let action_key_lines: Vec<Line> = actions
+            .iter()
+            .map(|(k, _)| Line::from(Span::styled(*k, Style::new().cyan())))
+            .collect();
+
+        let action_keys = Paragraph::new(action_key_lines)
+            .alignment(Alignment::Left)
+            .block(Block::default().padding(Padding::left(1)));
+
+        let action_desc_lines: Vec<Line> = actions
+            .iter()
+            .map(|(_, d)| Line::from(Span::raw(*d)))
+            .collect();
+
+        let action_desc = Paragraph::new(action_desc_lines)
+            .alignment(Alignment::Left)
+            .block(Block::default().padding(Padding::left(1)));
+
+        // === Navigations ===
+        let navigation_title = Paragraph::new(Text::styled(
+            "--- Navigations ---",
+            Style::new().green().italic(),
+        ))
+        .alignment(Alignment::Left)
+        .block(Block::default().padding(Padding {
+            left: 1,
+            right: 1,
+            top: 1,
+            bottom: 0,
+        }));
+
+        let navigation_key_lines: Vec<Line> = navigations
+            .iter()
+            .map(|(k, _)| Line::from(Span::styled(*k, Style::new().cyan())))
+            .collect();
+
+        let navigation_keys = Paragraph::new(navigation_key_lines)
+            .alignment(Alignment::Left)
+            .block(Block::default().padding(Padding::left(1)));
+
+        let navigation_desc_lines: Vec<Line> = navigations
+            .iter()
+            .map(|(_, d)| Line::from(Span::raw(*d)))
+            .collect();
+
+        let navigation_desc = Paragraph::new(navigation_desc_lines)
+            .alignment(Alignment::Left)
+            .block(Block::default().padding(Padding::left(1)));
+
+        // Render outer block
+        block.render(popup_area, buf);
+
+        // Render actions
+        action_title.render(action_title_layout, buf);
+        action_keys.render(action_key_layout, buf);
+        action_desc.render(action_desc_layout, buf);
+
+        // Render navigations
+        navigation_title.render(navigation_title_layout, buf);
+        navigation_keys.render(navigation_key_layout, buf);
+        navigation_desc.render(navigation_desc_layout, buf);
     }
 }
