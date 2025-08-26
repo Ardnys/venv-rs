@@ -13,7 +13,7 @@ color-eyre = "0.6.3"
 config = "0.15.11"
 serde = { version = "1.0", features = ["derive"] }
 clap = { version = "4.5.40", features = ["derive"] }
-rayon = "1.10.0"
+rayon = "1.11.0"
 walkdir = "2.5.0"
 arboard = "3"
 dirs = "6"
