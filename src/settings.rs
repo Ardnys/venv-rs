@@ -7,6 +7,7 @@ use serde::Deserialize;
 #[derive(Deserialize)]
 pub struct Settings {
     pub shell: Shell,
+    pub venvs_dir: Option<String>,
     pub extra: ExtraFeatures,
 }
 
@@ -15,7 +16,7 @@ pub struct ExtraFeatures {
     pub use_xclip: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Shell {
     ZSH,
@@ -38,6 +39,18 @@ impl Shell {
             Shell::CMD => format!("{path_str}\\activate.bat"),
             Shell::POWERSHELL => format!("{path_str}\\Activate.ps1"),
         }
+    }
+    pub fn variants() -> &'static [&'static str] {
+        &[
+            "zsh",
+            "bash",
+            "fish",
+            "csh",
+            "tsch",
+            "pwsh",
+            "cmd",
+            "powershell",
+        ]
     }
 }
 
@@ -68,7 +81,7 @@ pub fn get_config() -> Result<Settings, config::ConfigError> {
     fs::create_dir_all(config_dir.as_path())
         .expect("Could not create config directories for some reason");
 
-    let settings = Config::builder();
+    let settings = Config::builder().set_default("venvs_dir", Option::<String>::None)?;
 
     let settings = if cfg!(target_os = "linux") {
         settings

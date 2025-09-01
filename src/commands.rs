@@ -7,6 +7,10 @@ use clap::{Parser, Subcommand};
 pub struct Cli {
     #[command(subcommand)]
     pub kind: Kind,
+
+    /// Shell for the activation command
+    #[arg(short, long)]
+    pub shell: Option<String>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -19,5 +23,8 @@ pub enum Kind {
     /// Search virtual environments recursively
     Search { path: PathBuf },
     /// Directory containing virtual environments
-    Venvs { path: PathBuf },
+    Venvs { path: Option<PathBuf> },
+    /// List available shells
+    #[command(visible_alias = "ls")]
+    ListShells,
 }

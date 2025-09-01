@@ -98,8 +98,8 @@ impl Venv {
     }
 
     pub fn activation_path(&self) -> PathBuf {
-        // TODO: can i check what kind of shell is active?
-        PathBuf::from_str(&self.name).unwrap().join(&self.binaries)
+        // PathBuf::from_str(&self.name).unwrap().join(&self.binaries)
+        self.binaries.clone()
     }
 
     pub fn requirements(&self) -> PathBuf {

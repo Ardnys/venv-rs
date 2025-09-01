@@ -17,6 +17,7 @@ rayon = "1.10.0"
 walkdir = "2.5.0"
 arboard = "3"
 dirs = "6"
+dunce = "1"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

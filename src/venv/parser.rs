@@ -181,6 +181,7 @@ pub fn parse_metadata(dist_info_path: PathBuf) -> Result<Metadata> {
 }
 // expects dir to be a virtual environment
 pub fn parse_from_dir(dir: &Path) -> Result<Venv> {
+    let dir = dunce::canonicalize(dir)?;
     if !dir.is_dir() {
         Err(eyre::eyre!("{} is not directory.", dir.display()))
     } else {
@@ -231,7 +232,7 @@ pub fn parse_from_dir(dir: &Path) -> Result<Venv> {
             parse_package_pairs(pairs).context("Error while parsing pairs")?;
 
         let venv_size = dir_size::ParallelReader
-            .get_dir_size(dir)
+            .get_dir_size(&dir)
             .context("Could not get venv size")?;
 
         let v = Venv::new(
