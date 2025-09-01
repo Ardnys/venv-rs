@@ -1,23 +1,22 @@
 # venv-rs
 
-venv-rs is a high level Python virtual environment manager specifically developed for my personal workflow and needs.
-
-My python virtual environments easily get out of hand, especially when I work on AI projects. I get confused and end up with 5 pytorch installations taking half of my disk space. It's difficult to manage manually with terminal and file explorer. Thus, this weird thing has been developed!
-
-Basically this will show me an overview of my virtual environments so I can keep them tidy.
+venv-rs is a high level Python virtual environment manager specifically developed for [my personal workflow and needs](https://ardnys.github.io/projects/venv-manager/).
 
 > [!WARNING]
-this project is in heavy development. i keep adding, removing, breaking and changing things.
-scope may change as well so even take this README with a generous sprinkle of top quality Himalayan salt. _crunch crunch_
+> this project is in heavy development. i keep adding, removing, breaking and changing things.
+> scope may change as well so even take this README with a generous sprinkle of top quality Himalayan salt. _crunch crunch_
 
 ## Features
+
 - Shows virtual environments, their size on disk, number of packages
 - Shows packages, versions, and sizes on disk
-- Prints activation command on exit
+- Copies activation command on exit
 - Prints requirements.txt so you don't have to activate it and print it manually
+- Cross platform. I use it in both Command Prompt and Git Bash on Windows.
 - Kind of satisfying to use imo
 
 ## Roadmap
+
 - [x] show packages in the venv
 - [x] show package versions and sizes
 - [x] human readable byte sizes
@@ -27,21 +26,26 @@ scope may change as well so even take this README with a generous sprinkle of to
 - [x] remove anyhow
 - [x] walk the directory tree and look for .env folders. that way i don't have to limit to this particular workflow.
 - [x] parse package dependencies
-    - [ ] add them to the package size
-    - [x] show dependencies in UI
-    - [ ] consider extra features and which dependencies they add
-- [ ] windows compatibility
-- [ ] popup confirmation as a flag
-- [ ] config file
-    - [ ] configure which shells are printed
-    - [ ] configure table printing or plain text printing
 
-[Ratatui]: https://ratatui.rs
+  - [ ] add them to the package size
+  - [ ] implement petgraph for dependencies
+  - [x] show dependencies in UI
+  - [ ] consider extra features and which dependencies they add
+
+- [x] windows compatibility
+- [x] copy activation command on exit
+- [x] config file
+
+  - [x] shell to use for activation command
+  - [x] default path to look for virtual environmnts
+
+- [ ] Index the virtual environments or save the parsed result so it doesn't take too long to load
 
 ## License
 
 Copyright (c) Ardnys
 
-This project is licensed under the MIT license ([LICENSE] or <http://opensource.org/licenses/MIT>)
+This project is licensed under the MIT license ([LICENSE][LICENSE] or [http://opensource.org/licenses/MIT](http://opensource.org/licenses/MIT))
 
+[Ratatui]: https://ratatui.rs
 [LICENSE]: ./LICENSE
