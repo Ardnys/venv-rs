@@ -1,5 +1,5 @@
 #[cfg(target_os = "linux")]
-mod clipboard {
+mod cpy {
     use std::io::Write;
     use std::process::{Command, Stdio};
 
@@ -17,7 +17,7 @@ mod clipboard {
 }
 
 #[cfg(windows)]
-mod clipboard {
+mod cpy {
     use arboard::Clipboard;
 
     pub fn copy_to_clipboard(cmd: &str) -> color_eyre::Result<()> {
@@ -26,4 +26,4 @@ mod clipboard {
     }
 }
 
-pub use clipboard::copy_to_clipboard;
+pub use cpy::copy_to_clipboard;
