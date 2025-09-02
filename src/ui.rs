@@ -102,7 +102,7 @@ impl App {
             .venv_list
             .venvs
             .iter()
-            .map(|venv| ListItem::from(venv.name.clone()))
+            .map(|vui| ListItem::from(vui.venv.name.clone()))
             .collect();
 
         let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
@@ -140,11 +140,12 @@ impl App {
                 _ => PANEL_STYLE,
             });
 
-        let mut v = self.get_selected_venv();
+        let mut v = self.get_selected_venv_ui();
         let style = Style::default();
         let no_dependency_style = Style::default().magenta().italic();
 
         let items: Vec<ListItem> = v
+            .venv
             .packages
             .iter()
             .map(|pack| {
@@ -262,7 +263,7 @@ impl App {
             .borders(Borders::ALL)
             .border_style(PANEL_STYLE);
 
-        let venv = self.get_selected_venv();
+        let venv = self.get_selected_venv_ui().venv;
         let style = Style::new().light_blue().italic();
         let details = vec![
             Line::from(Span::styled(format!("Name:     {}", venv.name), style)),

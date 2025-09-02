@@ -4,28 +4,32 @@ use std::{
     str::FromStr,
 };
 
+use bincode::{Decode, Encode};
 use color_eyre::Result;
 use color_eyre::eyre;
 use ratatui::widgets::{ListState, ScrollbarState};
 
-use crate::venv::parser::parse_from_dir;
+use crate::venv::{metadata::Metadata, parser::parse_from_dir};
 
-use super::parser::Metadata;
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Encode, Decode)]
 pub struct Venv {
     pub name: String,
     pub version: String,
     pub size: u64,
-    pub packages: Vec<Package>, // Vec<Rc<Package>>
+    pub packages: Vec<Package>,
     pub num_dist_info_packages: i32,
     pub binaries: PathBuf,
     pub path: PathBuf,
+}
+
+#[derive(Debug, Clone)]
+pub struct VenvUi {
+    pub venv: Venv,
     pub list_state: ListState,
     pub scroll_state: ScrollbarState,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Encode, Decode)]
 pub struct Package {
     pub name: String,
     pub version: String,
@@ -34,8 +38,8 @@ pub struct Package {
 }
 
 #[derive(Debug, Clone)]
-pub struct VenvList {
-    pub venvs: Vec<Venv>,
+pub struct VenvListUi {
+    pub venvs: Vec<VenvUi>,
     pub list_state: ListState,
     pub scroll_state: ScrollbarState,
 }
@@ -65,10 +69,8 @@ impl Venv {
             name: name.to_string(),
             version,
             size,
-            scroll_state: ScrollbarState::new(packages.len()),
             packages,
             num_dist_info_packages,
-            list_state: ListState::default().with_selected(Some(0)),
             binaries,
             path,
         }
@@ -98,13 +100,10 @@ impl Venv {
     }
 
     pub fn activation_path(&self) -> PathBuf {
-        // PathBuf::from_str(&self.name).unwrap().join(&self.binaries)
         self.binaries.clone()
     }
 
     pub fn requirements(&self) -> PathBuf {
-        // TODO: I'll try to recreate it properly
-        // WARN: I know very hacky
         PathBuf::from_str(&self.name)
             .unwrap()
             .join(&self.binaries)
@@ -112,12 +111,23 @@ impl Venv {
     }
 }
 
-impl VenvList {
+impl VenvUi {
+    pub fn new(venv: Venv) -> Self {
+        Self {
+            scroll_state: ScrollbarState::new(venv.packages.len()),
+            venv: venv,
+            list_state: ListState::default().with_selected(Some(0)),
+        }
+    }
+}
+
+impl VenvListUi {
     pub fn new(venvs: Vec<Venv>) -> Self {
+        let venvs_ui: Vec<VenvUi> = venvs.into_iter().map(|v| VenvUi::new(v)).collect();
         Self {
             list_state: ListState::default().with_selected(Some(0)),
-            scroll_state: ScrollbarState::new(venvs.len()),
-            venvs,
+            scroll_state: ScrollbarState::new(venvs_ui.len()),
+            venvs: venvs_ui,
         }
     }
 }

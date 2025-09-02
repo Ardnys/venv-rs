@@ -2,7 +2,10 @@ use std::{path::PathBuf, process::Command};
 
 use crate::{
     event::{AppEvent, Event, EventHandler},
-    venv::{Venv, VenvList, model::Package},
+    venv::{
+        Venv, VenvListUi,
+        model::{Package, VenvUi},
+    },
 };
 use crossterm::event::KeyEventKind;
 use ratatui::{
@@ -18,7 +21,7 @@ pub struct App {
     /// Event handler.
     pub events: EventHandler,
     /// List of virtual environments
-    pub venv_list: VenvList,
+    pub venv_list: VenvListUi,
     pub venv_index: usize,
     pub packages_index: usize,
     pub current_focus: Panel,
@@ -50,7 +53,7 @@ impl App {
             events: EventHandler::new(),
             // TODO: constructor should receive the venv_list.
             // it does not care about how venv_list is created
-            venv_list: VenvList::new(venvs),
+            venv_list: VenvListUi::new(venvs),
             venv_index: 0,
             current_focus: Panel::Venv,
             packages_index: 0,
@@ -88,17 +91,17 @@ impl App {
                     AppEvent::SwitchLeft => self.switch_left(),
                     AppEvent::SwitchRight => self.switch_right(),
                     AppEvent::SelectVenv => {
-                        let v = self.get_selected_venv_ref();
-                        let venv_path = v.activation_path();
+                        let v = self.get_selected_venv_ui_ref();
+                        let venv_path = v.venv.activation_path();
                         self.output = Output::VenvPath(venv_path);
                         self.quit();
                     }
                     AppEvent::Requirements => {
-                        let v = self.get_selected_venv_ref();
+                        let v = self.get_selected_venv_ui_ref();
                         // TODO: terrible error handling here. fix it. probs show the error message in
                         // the TUI
                         // TODO: confirmation as well
-                        let python = v.requirements();
+                        let python = v.venv.requirements();
                         let output = Command::new(python)
                             .args(["-m", "pip", "freeze"])
                             .output()?;
@@ -184,14 +187,15 @@ impl App {
             Panel::Packages => {
                 // These are kinda ugly because inner list state would overflow.
                 let max = self
-                    .get_selected_venv_ref()
+                    .get_selected_venv_ui_ref()
+                    .venv
                     .packages
                     .len()
                     .saturating_sub(1);
 
                 let next = self.packages_index.saturating_add(1).min(max);
 
-                let v = self.get_selected_venv_ref();
+                let v = self.get_selected_venv_ui_ref();
                 v.list_state.select(Some(next));
 
                 self.packages_index = next;
@@ -205,7 +209,7 @@ impl App {
                 self.update_venv_index();
             }
             Panel::Packages => {
-                let current_venv = self.get_selected_venv_ref();
+                let current_venv = self.get_selected_venv_ui_ref();
                 current_venv.list_state.select_previous();
                 self.update_package_index();
             }
@@ -218,7 +222,7 @@ impl App {
                 self.update_venv_index();
             }
             Panel::Packages => {
-                let current_venv = self.get_selected_venv_ref();
+                let current_venv = self.get_selected_venv_ui_ref();
                 current_venv.list_state.select_first();
                 self.update_package_index();
             }
@@ -232,12 +236,13 @@ impl App {
             }
             Panel::Packages => {
                 let last_index = self
-                    .get_selected_venv_ref()
+                    .get_selected_venv_ui_ref()
+                    .venv
                     .packages
                     .len()
                     .saturating_sub(1);
 
-                let current_venv = self.get_selected_venv_ref();
+                let current_venv = self.get_selected_venv_ui_ref();
                 current_venv.list_state.select(Some(last_index));
                 self.update_package_index();
             }
@@ -257,13 +262,14 @@ impl App {
             Panel::Packages => {
                 let some_down = std::cmp::min(
                     self.packages_index.saturating_add(5),
-                    self.get_selected_venv_ref()
+                    self.get_selected_venv_ui_ref()
+                        .venv
                         .packages
                         .len()
                         .saturating_sub(1),
                 );
 
-                let current_venv = self.get_selected_venv_ref();
+                let current_venv = self.get_selected_venv_ui_ref();
 
                 current_venv.list_state.select(Some(some_down));
                 self.update_package_index();
@@ -284,12 +290,13 @@ impl App {
             Panel::Packages => {
                 let some_up = std::cmp::min(
                     self.packages_index.saturating_sub(5),
-                    self.get_selected_venv_ref()
+                    self.get_selected_venv_ui_ref()
+                        .venv
                         .packages
                         .len()
                         .saturating_sub(1),
                 );
-                let current_venv = self.get_selected_venv_ref();
+                let current_venv = self.get_selected_venv_ui_ref();
 
                 current_venv.list_state.select(Some(some_up));
                 self.update_package_index();
@@ -308,23 +315,23 @@ impl App {
         }
     }
     pub fn update_package_index(&mut self) {
-        let current_venv = self.get_selected_venv_ref();
+        let current_venv = self.get_selected_venv_ui_ref();
         if let Some(i) = current_venv.list_state.selected() {
-            if i >= current_venv.packages.len() {
-                self.packages_index = current_venv.packages.len().saturating_sub(1);
+            if i >= current_venv.venv.packages.len() {
+                self.packages_index = current_venv.venv.packages.len().saturating_sub(1);
                 return;
             }
             self.packages_index = i;
         }
     }
-    pub fn get_selected_venv(&mut self) -> Venv {
+    pub fn get_selected_venv_ui(&mut self) -> VenvUi {
         self.venv_list.venvs[self.venv_index].clone()
     }
-    pub fn get_selected_venv_ref(&mut self) -> &mut Venv {
+    pub fn get_selected_venv_ui_ref(&mut self) -> &mut VenvUi {
         &mut self.venv_list.venvs[self.venv_index]
     }
     pub fn get_selected_package(&mut self) -> Package {
-        let v = self.get_selected_venv();
+        let v = self.get_selected_venv_ui().venv;
         v.packages[self.packages_index].clone()
     }
 }
