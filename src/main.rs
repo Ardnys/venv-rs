@@ -163,6 +163,7 @@ fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
+// TODO: fix this
 fn venv_path_to_cache_path(p: &Path) -> Option<PathBuf> {
     let fname = p
         .file_name()
@@ -176,12 +177,7 @@ fn venv_path_to_cache_path(p: &Path) -> Option<PathBuf> {
         .join("venv_rs")
         .join(cached_fname);
 
-    match fs::exists(&cached_file) {
-        Ok(true) => Some(cached_file),
-        Ok(false) => None,
-        Err(err) => {
-            eprintln!("Error while getting cached file: {:?}", err);
-            None
-        }
-    }
+    fs::create_dir_all(&cached_file).expect("Could not create cached file");
+
+    Some(cached_file)
 }

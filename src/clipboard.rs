@@ -3,7 +3,7 @@ mod cpy {
     use std::io::Write;
     use std::process::{Command, Stdio};
 
-    pub fn copy_to_clipboard(cmd: &str) -> anyhow::Result<()> {
+    pub fn copy_to_clipboard(cmd: &str) -> color_eyre::Result<()> {
         let mut xclip = Command::new("xclip")
             .args(["-selection", "clipboard"])
             .stdin(Stdio::piped())

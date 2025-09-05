@@ -269,6 +269,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "claims"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bba18ee93d577a8428902687bcc2b6b45a56b1981a1f6d779731c86cc4c5db18"
+
+[[package]]
 name = "clap"
 version = "4.5.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1845,6 +1851,7 @@ version = "0.1.0"
 dependencies = [
  "arboard",
  "bincode",
+ "claims",
  "clap",
  "color-eyre",
  "config",

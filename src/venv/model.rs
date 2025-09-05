@@ -8,7 +8,7 @@ use std::{
 use bincode::{Decode, Encode, config};
 use color_eyre::Result;
 use color_eyre::eyre;
-use dirs::{cache_dir, config_dir};
+use dirs::cache_dir;
 use ratatui::widgets::{ListState, ScrollbarState};
 
 use crate::venv::{metadata::Metadata, parser::parse_from_dir};
@@ -117,9 +117,16 @@ impl Venv {
             .join(filename)
     }
 
+    pub fn save_cache_to(&self, cache_path: &Path) -> Result<()> {
+        let config = config::standard();
+        let encoded = bincode::encode_to_vec(self, config)?;
+        fs::write(cache_path, encoded)?;
+        Ok(())
+    }
+
     pub fn save_cache(&self) -> Result<()> {
         let config = config::standard();
-        let encoded = bincode::encode_to_vec(&self, config)?;
+        let encoded = bincode::encode_to_vec(self, config)?;
         let path = self.cache_path();
         fs::create_dir_all(path.parent().unwrap())?;
         fs::write(path, encoded)?;
@@ -149,7 +156,7 @@ impl VenvUi {
     pub fn new(venv: Venv) -> Self {
         Self {
             scroll_state: ScrollbarState::new(venv.packages.len()),
-            venv: venv,
+            venv,
             list_state: ListState::default().with_selected(Some(0)),
         }
     }
@@ -157,7 +164,7 @@ impl VenvUi {
 
 impl VenvListUi {
     pub fn new(venvs: Vec<Venv>) -> Self {
-        let venvs_ui: Vec<VenvUi> = venvs.into_iter().map(|v| VenvUi::new(v)).collect();
+        let venvs_ui: Vec<VenvUi> = venvs.into_iter().map(VenvUi::new).collect();
         Self {
             list_state: ListState::default().with_selected(Some(0)),
             scroll_state: ScrollbarState::new(venvs_ui.len()),
@@ -166,9 +173,29 @@ impl VenvListUi {
     }
 }
 
+fn to_cache_path(venv_path: &Path, cache_dir: &Path) -> Option<PathBuf> {
+    let fname = venv_path
+        .file_name()
+        .expect("Could not get the filename")
+        .to_str()
+        .unwrap();
+
+    let cached_fname = format!("{fname}.bin");
+    let cached_file = cache_dir.join(cached_fname);
+
+    Some(cached_file)
+}
+
+#[derive(Debug)]
 pub struct VenvManager {
     cache: HashMap<PathBuf, Venv>,
     cache_path: PathBuf,
+}
+
+impl Default for VenvManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl VenvManager {
@@ -190,12 +217,22 @@ impl VenvManager {
         Ok(())
     }
 
+    pub fn save_cache(&self) -> Result<()> {
+        for v in self.cache.values() {
+            if let Some(cache_path) = to_cache_path(&v.path, &self.cache_path) {
+                v.save_cache_to(&cache_path)?;
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn get(&mut self, p: &Path) -> Result<&Venv> {
         if !self.cache.contains_key(p) {
             let venv = Venv::from_path(p)?;
             self.cache.insert(p.to_path_buf(), venv);
         }
-        Ok(&self.cache.get(p).unwrap())
+        Ok(self.cache.get(p).unwrap())
     }
 }
 
@@ -203,15 +240,17 @@ impl VenvManager {
 mod tests {
     use std::{collections::HashMap, fs, path::PathBuf};
 
+    use claims::assert_ok;
     use tempfile::tempdir;
 
     use crate::venv::model::VenvManager;
 
     fn prepare() -> VenvManager {
-        let cache_dir = tempdir().unwrap();
+        let cache_dir = tempdir().unwrap().path().join("venv_rs");
+        fs::create_dir_all(&cache_dir).expect("Failed to create them dirs");
         let mut vman = VenvManager {
             cache: HashMap::new(),
-            cache_path: cache_dir.path().to_path_buf(),
+            cache_path: cache_dir.to_path_buf(),
         };
         let venv_path = PathBuf::from(".venv/testenv");
         if let Ok(yes) = fs::exists(&venv_path) {
@@ -222,9 +261,30 @@ mod tests {
         vman
     }
 
-    // #[test]
-    // fn empty_cache() {
-    //     let cache_dir_empty = fs::read_dir(cache_dir).unwrap().next().is_none();
-    //     assert!(cache_dir_empty);
-    // }
+    #[test]
+    fn saved_cache() {
+        let vm = prepare();
+
+        let res = vm.save_cache();
+        assert_ok!(res);
+
+        let mut it = vm
+            .cache
+            .values()
+            .zip(fs::read_dir(vm.cache_path).expect("Failed to read cache dir"));
+
+        let (venv, cached_file) = it.next().unwrap();
+        let cached_file = cached_file.expect("Error while getting cached file").path();
+        let fname = cached_file.file_stem().unwrap();
+        let cached_file_name = fname.to_str().unwrap();
+        assert_eq!(venv.name, cached_file_name);
+    }
+
+    #[test]
+    fn load_cache() {
+        let mut vm = prepare();
+        let _ = vm.save_cache();
+        let res = vm.load_cache();
+        assert_ok!(res);
+    }
 }
