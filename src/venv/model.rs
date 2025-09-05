@@ -1,12 +1,14 @@
 use std::{
+    collections::HashMap,
     fs::{self},
     path::{Path, PathBuf},
     str::FromStr,
 };
 
-use bincode::{Decode, Encode};
+use bincode::{Decode, Encode, config};
 use color_eyre::Result;
 use color_eyre::eyre;
+use dirs::{cache_dir, config_dir};
 use ratatui::widgets::{ListState, ScrollbarState};
 
 use crate::venv::{metadata::Metadata, parser::parse_from_dir};
@@ -99,6 +101,38 @@ impl Venv {
         Ok(venvs)
     }
 
+    pub fn from_cache(path: &Path) -> Result<Vec<Self>> {
+        fs::read_dir(path)?
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .map(|path| Venv::load_cache(&path))
+            .collect()
+    }
+
+    fn cache_path(&self) -> PathBuf {
+        let filename = format!("{}.bin", self.name);
+        cache_dir()
+            .expect("Could not get cache dir")
+            .join("venv_rs")
+            .join(filename)
+    }
+
+    pub fn save_cache(&self) -> Result<()> {
+        let config = config::standard();
+        let encoded = bincode::encode_to_vec(&self, config)?;
+        let path = self.cache_path();
+        fs::create_dir_all(path.parent().unwrap())?;
+        fs::write(path, encoded)?;
+        Ok(())
+    }
+
+    pub fn load_cache(path: &Path) -> Result<Self> {
+        let config = config::standard();
+        let bytes = fs::read(path)?;
+        let (decoded, _len): (Self, usize) = bincode::decode_from_slice(&bytes[..], config)?;
+        Ok(decoded)
+    }
+
     pub fn activation_path(&self) -> PathBuf {
         self.binaries.clone()
     }
@@ -130,4 +164,67 @@ impl VenvListUi {
             venvs: venvs_ui,
         }
     }
+}
+
+pub struct VenvManager {
+    cache: HashMap<PathBuf, Venv>,
+    cache_path: PathBuf,
+}
+
+impl VenvManager {
+    pub fn new() -> Self {
+        let cache_path = cache_dir()
+            .expect("Could not get cache dir")
+            .join("venv_rs");
+
+        Self {
+            cache: HashMap::new(),
+            cache_path,
+        }
+    }
+
+    pub fn load_cache(&mut self) -> Result<()> {
+        if let Ok(venvs) = Venv::from_cache(&self.cache_path) {
+            self.cache = venvs.into_iter().map(|v| (v.path.clone(), v)).collect();
+        }
+        Ok(())
+    }
+
+    pub fn get(&mut self, p: &Path) -> Result<&Venv> {
+        if !self.cache.contains_key(p) {
+            let venv = Venv::from_path(p)?;
+            self.cache.insert(p.to_path_buf(), venv);
+        }
+        Ok(&self.cache.get(p).unwrap())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::HashMap, fs, path::PathBuf};
+
+    use tempfile::tempdir;
+
+    use crate::venv::model::VenvManager;
+
+    fn prepare() -> VenvManager {
+        let cache_dir = tempdir().unwrap();
+        let mut vman = VenvManager {
+            cache: HashMap::new(),
+            cache_path: cache_dir.path().to_path_buf(),
+        };
+        let venv_path = PathBuf::from(".venv/testenv");
+        if let Ok(yes) = fs::exists(&venv_path) {
+            assert!(yes);
+        }
+        let _ = vman.get(&venv_path).expect("Error while parsing venv");
+
+        vman
+    }
+
+    // #[test]
+    // fn empty_cache() {
+    //     let cache_dir_empty = fs::read_dir(cache_dir).unwrap().next().is_none();
+    //     assert!(cache_dir_empty);
+    // }
 }

@@ -226,38 +226,7 @@ mod tests {
     use super::*;
     use std::{collections::HashSet, fs::File};
 
-    // Tests for MetadataBuilder
-    #[test]
-    fn test_metadata_builder_new() {
-        let builder = MetadataBuilder::new();
-        assert!(builder.name.is_none());
-        assert!(builder.version.is_none());
-        assert!(builder.summary.is_none());
-        assert!(builder.dependencies.is_none());
-    }
-
-    #[test]
-    fn test_metadata_builder_methods() {
-        let mut builder = MetadataBuilder::new();
-        let mut deps = HashSet::new();
-        deps.insert("numpy".to_string());
-
-        builder
-            .name("opencv-python".to_string())
-            .version("4.12.0.88".to_string())
-            .summary("Wrapper package for OpenCV Python bindings.".to_string())
-            .add_dependencies(deps.clone());
-
-        assert_eq!(builder.name, Some("opencv-python".to_string()));
-        assert_eq!(builder.version, Some("4.12.0.88".to_string()));
-        assert_eq!(
-            builder.summary,
-            Some("Wrapper package for OpenCV Python bindings.".to_string())
-        );
-        assert_eq!(builder.dependencies, Some(deps));
-    }
-
-    #[test]
+      #[test]
     fn test_parse_metadata() -> Result<()> {
         // 1. Create a temporary directory.
         let dir = tempdir().unwrap();

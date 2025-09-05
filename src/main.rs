@@ -1,4 +1,7 @@
-use std::path::Path;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use app::Output;
 use clap::Parser;
@@ -7,6 +10,7 @@ use color_eyre::{
     owo_colors::OwoColorize,
 };
 use commands::Cli;
+use dirs::cache_dir;
 use settings::get_config;
 use venv::{Venv, parser::parse_from_dir};
 use venv_search::search_venvs;
@@ -43,16 +47,43 @@ fn main() -> color_eyre::Result<()> {
     let kind = cli.kind;
     // TODO: tbh these paths could use Cow maybe?? I allocate a lot of memory for the same path
     let vec_venvs = match kind {
-        commands::Kind::Venv { path } => [path]
-            .iter()
-            .filter_map(|p| parse_from_dir(p).ok())
-            .collect(),
-        commands::Kind::Search { path } => search_venvs(path)
-            .iter()
-            .filter_map(|p| parse_from_dir(p).ok())
-            .collect(),
+        commands::Kind::Venv { path } => {
+            // try to get the venv from cache first
+            if let Some(cached_path) = venv_path_to_cache_path(&path) {
+                let venv = Venv::load_cache(&cached_path)?;
+                vec![venv]
+            } else {
+                // parse it as is if cache fails
+                [path]
+                    .iter()
+                    .filter_map(|p| parse_from_dir(p).ok())
+                    .collect()
+            }
+        }
+        commands::Kind::Search { path } => {
+            let venv_paths = search_venvs(path);
+            let mut venvs = Vec::with_capacity(venv_paths.len());
+
+            for p in &venv_paths {
+                if let Some(cached_path) = venv_path_to_cache_path(&p) {
+                    let venv = Venv::load_cache(&cached_path)?;
+                    venvs.push(venv);
+                } else {
+                    let venv = parse_from_dir(p).unwrap();
+                    venvs.push(venv);
+                }
+            }
+            venvs
+        }
         commands::Kind::Venvs { path } => {
-            if let Some(p) = path {
+            let cache_path = cache_dir()
+                .expect("Could not get cache dir")
+                .join("venv_rs");
+            let venvs =
+                Venv::from_cache(&cache_path).wrap_err("Error while reading venvs from cache.")?;
+            if !venvs.is_empty() {
+                venvs
+            } else if let Some(p) = path {
                 Venv::from_venvs_dir(&p).wrap_err_with(|| {
                     format!("Error while reading venvs directory: {}", p.display())
                 })?
@@ -76,6 +107,7 @@ fn main() -> color_eyre::Result<()> {
             return Ok(());
         }
     };
+
     // TODO: config to run the TUI in stderr to allow pipes and stuff
     let terminal = ratatui::init();
     let app = App::new(vec_venvs);
@@ -129,4 +161,27 @@ fn main() -> color_eyre::Result<()> {
     }
 
     Ok(())
+}
+
+fn venv_path_to_cache_path(p: &Path) -> Option<PathBuf> {
+    let fname = p
+        .file_name()
+        .expect("Could not get the filename")
+        .to_str()
+        .unwrap();
+
+    let cached_fname = format!("{fname}.bin");
+    let cached_file = cache_dir()
+        .expect("Could not get cache dir")
+        .join("venv_rs")
+        .join(cached_fname);
+
+    match fs::exists(&cached_file) {
+        Ok(true) => Some(cached_file),
+        Ok(false) => None,
+        Err(err) => {
+            eprintln!("Error while getting cached file: {:?}", err);
+            None
+        }
+    }
 }
