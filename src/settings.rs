@@ -1,4 +1,4 @@
-use std::{borrow::Cow, fs};
+use std::{borrow::Cow, fs, path::PathBuf};
 
 use config::Config;
 use dirs::config_dir;
@@ -16,7 +16,7 @@ pub struct ExtraFeatures {
     pub use_xclip: bool,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Shell {
     ZSH,
@@ -73,6 +73,20 @@ impl TryFrom<String> for Shell {
     }
 }
 
+impl Settings {
+    pub fn normalize_paths(mut self) -> Self {
+        if let Some(venvs_dir) = &self.venvs_dir {
+            // Expand ~
+            let expanded = shellexpand::tilde(venvs_dir).into_owned();
+
+            let canon = fs::canonicalize(&expanded).unwrap_or(PathBuf::from(expanded));
+
+            self.venvs_dir = Some(canon.to_string_lossy().into_owned());
+        }
+        self
+    }
+}
+
 pub fn get_config() -> Result<Settings, config::ConfigError> {
     let config_dir = config_dir()
         .expect("Couldn't get config dir")
@@ -97,5 +111,5 @@ pub fn get_config() -> Result<Settings, config::ConfigError> {
         .add_source(config::File::from(config_dir.join("config.yaml")).required(false))
         .build()?;
 
-    settings.try_deserialize::<Settings>()
+    Ok(settings.try_deserialize::<Settings>()?.normalize_paths())
 }

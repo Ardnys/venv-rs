@@ -2,6 +2,7 @@ use std::{
     collections::HashMap,
     fs::{self},
     path::{Path, PathBuf},
+    rc::Rc,
     str::FromStr,
 };
 
@@ -26,7 +27,7 @@ pub struct Venv {
 
 #[derive(Debug, Clone)]
 pub struct VenvUi {
-    pub venv: Venv,
+    pub venv: Rc<Venv>,
     pub list_state: ListState,
     pub scroll_state: ScrollbarState,
 }
@@ -153,7 +154,7 @@ impl Venv {
 }
 
 impl VenvUi {
-    pub fn new(venv: Venv) -> Self {
+    pub fn new(venv: Rc<Venv>) -> Self {
         Self {
             scroll_state: ScrollbarState::new(venv.packages.len()),
             venv,
@@ -163,7 +164,7 @@ impl VenvUi {
 }
 
 impl VenvListUi {
-    pub fn new(venvs: Vec<Venv>) -> Self {
+    pub fn new(venvs: Vec<Rc<Venv>>) -> Self {
         let venvs_ui: Vec<VenvUi> = venvs.into_iter().map(VenvUi::new).collect();
         Self {
             list_state: ListState::default().with_selected(Some(0)),
@@ -188,7 +189,7 @@ fn to_cache_path(venv_path: &Path, cache_dir: &Path) -> Option<PathBuf> {
 
 #[derive(Debug)]
 pub struct VenvManager {
-    cache: HashMap<PathBuf, Venv>,
+    cache: HashMap<PathBuf, Rc<Venv>>,
     cache_path: PathBuf,
 }
 
@@ -204,15 +205,28 @@ impl VenvManager {
             .expect("Could not get cache dir")
             .join("venv_rs");
 
+        fs::create_dir_all(&cache_path).expect("Failed to create them dirs");
+
         Self {
             cache: HashMap::new(),
             cache_path,
         }
     }
 
+    pub fn venvs_from_cache(&self) -> Result<Vec<Venv>> {
+        fs::read_dir(&self.cache_path)?
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .map(|path| Venv::load_cache(&path))
+            .collect()
+    }
+
     pub fn load_cache(&mut self) -> Result<()> {
-        if let Ok(venvs) = Venv::from_cache(&self.cache_path) {
-            self.cache = venvs.into_iter().map(|v| (v.path.clone(), v)).collect();
+        if let Ok(venvs) = self.venvs_from_cache() {
+            self.cache = venvs
+                .into_iter()
+                .map(|v| (v.path.clone(), Rc::new(v)))
+                .collect();
         }
         Ok(())
     }
@@ -227,12 +241,28 @@ impl VenvManager {
         Ok(())
     }
 
-    pub fn get(&mut self, p: &Path) -> Result<&Venv> {
+    pub fn get(&mut self, p: &Path) -> Result<Rc<Venv>> {
         if !self.cache.contains_key(p) {
             let venv = Venv::from_path(p)?;
-            self.cache.insert(p.to_path_buf(), venv);
+            self.cache.insert(p.to_path_buf(), venv.into());
         }
-        Ok(self.cache.get(p).unwrap())
+        Ok(self.cache.get(p).unwrap().clone())
+    }
+
+    pub fn reload_venv(&mut self, p: &Path) -> Result<Rc<Venv>> {
+        let venv = Venv::from_path(p)?;
+        self.cache.insert(p.to_path_buf(), venv.into());
+        Ok(self.cache.get(p).unwrap().clone())
+    }
+
+    // TODO: I haven't found a nice way to implement this. maybe later
+    pub fn is_venv_stale(&self, p: &Path) -> bool {
+        let _ = p;
+        todo!()
+    }
+
+    pub fn get_venvs(&self) -> Vec<Rc<Venv>> {
+        self.cache.values().cloned().collect()
     }
 }
 

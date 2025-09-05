@@ -19,6 +19,7 @@ arboard = "3"
 dirs = "6"
 dunce = "1"
 bincode = "2"
+shellexpand = "3.1.1"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

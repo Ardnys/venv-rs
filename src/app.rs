@@ -3,8 +3,8 @@ use std::{path::PathBuf, process::Command};
 use crate::{
     event::{AppEvent, Event, EventHandler},
     venv::{
-        Venv, VenvListUi,
-        model::{Package, VenvUi},
+        VenvListUi,
+        model::{Package, VenvManager, VenvUi},
     },
 };
 use crossterm::event::KeyEventKind;
@@ -21,6 +21,7 @@ pub struct App {
     /// Event handler.
     pub events: EventHandler,
     /// List of virtual environments
+    pub vm: VenvManager,
     pub venv_list: VenvListUi,
     pub venv_index: usize,
     pub packages_index: usize,
@@ -47,13 +48,15 @@ pub enum Output {
 
 impl App {
     /// Constructs a new instance of [`App`].
-    pub fn new(venvs: Vec<Venv>) -> Self {
+    pub fn new(vm: VenvManager) -> Self {
+        let venvs = vm.get_venvs();
         Self {
             running: true,
             events: EventHandler::new(),
             // TODO: constructor should receive the venv_list.
             // it does not care about how venv_list is created
             venv_list: VenvListUi::new(venvs),
+            vm,
             venv_index: 0,
             current_focus: Panel::Venv,
             packages_index: 0,
