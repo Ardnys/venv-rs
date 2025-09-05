@@ -57,7 +57,7 @@ impl Widget for &mut App {
             .padding(Padding::left(1));
 
         let footer_text = String::from(
-            "Exit: q | Movement: hjkl or arrow keys | Activate: a | Requirements: r | Help: ?",
+            "Exit: q | Movement: hjkl or ↓ ↑ ← → | Activate: a | Requirements: r | Help: ?",
         );
 
         let footer = Paragraph::new(footer_text)
@@ -75,6 +75,9 @@ impl Widget for &mut App {
 
         if self.show_help {
             self.render_help(area, buf);
+        }
+        if self.maybe_error.is_some() {
+            self.render_error(area, buf);
         }
     }
 }
@@ -324,6 +327,7 @@ impl App {
             ("q", "Exit"),
             ("a", "Activate selected venv"),
             ("r", "Print requirements and exit"),
+            ("u", "Parse the venv and update cache"),
             ("?", "Toggle keybinds"),
         ];
 
@@ -464,5 +468,44 @@ impl App {
         navigation_title.render(navigation_title_layout, buf);
         navigation_keys.render(navigation_key_layout, buf);
         navigation_desc.render(navigation_desc_layout, buf);
+    }
+
+    fn render_error(&mut self, area: Rect, buf: &mut Buffer) {
+        // Create centered rect: 60% width, 70% height
+        let popup_area = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Percentage(15), // top padding
+                Constraint::Percentage(70), // help box
+                Constraint::Percentage(15), // bottom padding
+            ])
+            .split(area)[1];
+
+        let popup_area = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(20), // left padding
+                Constraint::Percentage(60), // help box
+                Constraint::Percentage(20), // right padding
+            ])
+            .split(popup_area)[1];
+
+        // Clear the part where help popup is rendered
+        Clear.render(popup_area, buf);
+
+        let block = Block::new()
+            .title(Line::styled(
+                "! An Error Occured !",
+                Style::new().bold().red(),
+            ))
+            .borders(Borders::ALL)
+            .border_style(FOCUSED_PANEL_STYLE);
+
+        if let Some(rep) = &self.maybe_error {
+            let error_message = rep.to_string();
+            let error_text = Text::styled(error_message.to_string(), Style::new().on_black().red());
+            let error_paragraph = Paragraph::new(error_text).block(block);
+            error_paragraph.render(area, buf);
+        }
     }
 }

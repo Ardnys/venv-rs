@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     fs::{self},
     path::{Path, PathBuf},
     rc::Rc,
@@ -189,7 +189,7 @@ fn to_cache_path(venv_path: &Path, cache_dir: &Path) -> Option<PathBuf> {
 
 #[derive(Debug)]
 pub struct VenvManager {
-    cache: HashMap<PathBuf, Rc<Venv>>,
+    cache: BTreeMap<PathBuf, Rc<Venv>>,
     cache_path: PathBuf,
 }
 
@@ -208,7 +208,7 @@ impl VenvManager {
         fs::create_dir_all(&cache_path).expect("Failed to create them dirs");
 
         Self {
-            cache: HashMap::new(),
+            cache: BTreeMap::new(),
             cache_path,
         }
     }
@@ -249,10 +249,10 @@ impl VenvManager {
         Ok(self.cache.get(p).unwrap().clone())
     }
 
-    pub fn reload_venv(&mut self, p: &Path) -> Result<Rc<Venv>> {
+    pub fn reload_venv(&mut self, p: &Path) -> Result<()> {
         let venv = Venv::from_path(p)?;
         self.cache.insert(p.to_path_buf(), venv.into());
-        Ok(self.cache.get(p).unwrap().clone())
+        Ok(())
     }
 
     // TODO: I haven't found a nice way to implement this. maybe later
@@ -268,7 +268,7 @@ impl VenvManager {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, fs, path::PathBuf};
+    use std::{collections::BTreeMap, fs, path::PathBuf};
 
     use claims::assert_ok;
     use tempfile::tempdir;
@@ -279,7 +279,7 @@ mod tests {
         let cache_dir = tempdir().unwrap().path().join("venv_rs");
         fs::create_dir_all(&cache_dir).expect("Failed to create them dirs");
         let mut vman = VenvManager {
-            cache: HashMap::new(),
+            cache: BTreeMap::new(),
             cache_path: cache_dir.to_path_buf(),
         };
         let venv_path = PathBuf::from(".venv/testenv");

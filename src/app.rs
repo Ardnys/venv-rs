@@ -7,6 +7,7 @@ use crate::{
         model::{Package, VenvManager, VenvUi},
     },
 };
+use color_eyre::eyre;
 use crossterm::event::KeyEventKind;
 use ratatui::{
     DefaultTerminal,
@@ -27,6 +28,7 @@ pub struct App {
     pub packages_index: usize,
     pub current_focus: Panel,
     pub show_help: bool,
+    pub maybe_error: Option<eyre::Report>,
     output: Output,
 }
 
@@ -62,6 +64,7 @@ impl App {
             packages_index: 0,
             output: Output::None,
             show_help: false,
+            maybe_error: None,
         }
     }
 
@@ -93,6 +96,7 @@ impl App {
                     AppEvent::HalfPageDown => self.select_some_down(),
                     AppEvent::SwitchLeft => self.switch_left(),
                     AppEvent::SwitchRight => self.switch_right(),
+                    AppEvent::UpdateVenvCache => self.update_venv_cache(),
                     AppEvent::SelectVenv => {
                         let v = self.get_selected_venv_ui_ref();
                         let venv_path = v.venv.activation_path();
@@ -155,10 +159,28 @@ impl App {
             KeyCode::Left | KeyCode::Char('h') => self.events.send(AppEvent::SwitchLeft),
             KeyCode::Char('a') => self.events.send(AppEvent::SelectVenv),
             KeyCode::Char('r') => self.events.send(AppEvent::Requirements),
+            KeyCode::Char('u') => self.events.send(AppEvent::UpdateVenvCache),
             // Other handlers you could add here.
             _ => {}
         }
         Ok(())
+    }
+
+    pub fn update_venv_cache(&mut self) {
+        let selected_venv_path = self.get_selected_venv_ui().venv.path.clone();
+        // reloading removes the old value so we have to recalculate everything
+        match self.vm.reload_venv(&selected_venv_path) {
+            Ok(_) => {
+                let venvs = self.vm.get_venvs();
+                self.venv_list = VenvListUi::new(venvs);
+                self.maybe_error = None;
+                self.venv_list.list_state.select(Some(self.venv_index));
+                self.update_venv_index();
+            }
+            Err(e) => {
+                self.maybe_error = Some(e);
+            }
+        }
     }
 
     /// Handles the tick event of the terminal.

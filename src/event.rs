@@ -45,6 +45,7 @@ pub enum AppEvent {
     SwitchRight,
     SelectVenv,
     Requirements,
+    UpdateVenvCache,
 }
 
 /// Terminal event handler.

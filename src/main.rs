@@ -38,6 +38,8 @@ fn main() -> color_eyre::Result<()> {
         return Ok(());
     }
 
+    vm.save_cache()?;
+
     // TODO: config to run the TUI in stderr to allow pipes and stuff
     let terminal = ratatui::init();
     let app = App::new(vm);
