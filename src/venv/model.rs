@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     fs::{self},
     path::{Path, PathBuf},
     rc::Rc,
@@ -12,7 +12,9 @@ use color_eyre::eyre;
 use dirs::cache_dir;
 use ratatui::widgets::{ListState, ScrollbarState};
 
-use crate::venv::{metadata::Metadata, parser::parse_from_dir};
+use crate::venv::metadata::Metadata;
+
+use super::parser::VenvParser;
 
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct Venv {
@@ -80,7 +82,7 @@ impl Venv {
     }
 
     pub fn from_path(path: &Path) -> Result<Self> {
-        parse_from_dir(path)
+        VenvParser::parse_from_dir(path.to_path_buf())
     }
 
     pub fn from_venvs_dir(path: &Path) -> Result<Vec<Self>> {
@@ -90,13 +92,15 @@ impl Venv {
         let venvs: Vec<Self> = fs::read_dir(path)?
             .filter_map(Result::ok)
             .map(|venv| venv.path())
-            .filter_map(|v_pb| match parse_from_dir(&v_pb) {
-                Ok(venv) => Some(venv),
-                Err(err) => {
-                    eprintln!("Failed to parse venv at {}: {:#}", v_pb.display(), err);
-                    None
-                }
-            })
+            .filter_map(
+                |v_pb| match VenvParser::parse_from_dir(v_pb.to_path_buf()) {
+                    Ok(venv) => Some(venv),
+                    Err(err) => {
+                        eprintln!("Failed to parse venv at {}: {:#}", v_pb.display(), err);
+                        None
+                    }
+                },
+            )
             .collect();
 
         Ok(venvs)
@@ -242,7 +246,7 @@ impl VenvManager {
     }
 
     pub fn get(&mut self, p: &Path) -> Result<Rc<Venv>> {
-        if !self.cache.contains_key(p) {
+        if !self.cache.contains_key(p) || self.is_venv_stale(p) {
             let venv = Venv::from_path(p)?;
             self.cache.insert(p.to_path_buf(), venv.into());
         }
@@ -255,10 +259,42 @@ impl VenvManager {
         Ok(())
     }
 
-    // TODO: I haven't found a nice way to implement this. maybe later
     pub fn is_venv_stale(&self, p: &Path) -> bool {
-        let _ = p;
-        todo!()
+        let v = self.cache.get(p).unwrap();
+        // create a lookup map for package versions
+        let venv_package_lookup: HashMap<&str, &str> = v
+            .packages
+            .iter()
+            .map(|p| (p.name.as_ref(), p.version.as_ref()))
+            .collect();
+
+        // get the package files to check the versions, if they changed
+        let mut parser = VenvParser::new(p.to_path_buf());
+        parser = parser
+            .discover_packages()
+            .expect("Could not discover packages");
+        let new_dist_info = parser.dist_info_packages.unwrap();
+
+        for di in new_dist_info.into_iter() {
+            // dist-info anatomy {name}-{version}.dist-info
+            let di_fname = di.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+            let without_suffix = di_fname.strip_suffix(".dist-info").unwrap();
+
+            let (name_part, version) = without_suffix
+                .split_once("-")
+                .expect("Could not split dist-info");
+
+            if let Some(&cached_version) = venv_package_lookup.get(&name_part) {
+                if cached_version != version {
+                    return true;
+                }
+            } else {
+                // new package, also stale
+                return true;
+            }
+        }
+        false
     }
 
     pub fn get_venvs(&self) -> Vec<Rc<Venv>> {
@@ -316,5 +352,13 @@ mod tests {
         let _ = vm.save_cache();
         let res = vm.load_cache();
         assert_ok!(res);
+    }
+
+    #[test]
+    fn cache_not_stale() {
+        let vm = prepare();
+        let test_venv_path = PathBuf::from(".venv/testenv");
+        let res = vm.is_venv_stale(&test_venv_path);
+        assert!(!res);
     }
 }

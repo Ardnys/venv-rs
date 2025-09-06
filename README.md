@@ -26,20 +26,18 @@ venv-rs is a high level Python virtual environment manager specifically develope
 - [x] remove anyhow
 - [x] walk the directory tree and look for .env folders. that way i don't have to limit to this particular workflow.
 - [x] parse package dependencies
-
   - [ ] add them to the package size
   - [ ] implement petgraph for dependencies
   - [x] show dependencies in UI
   - [ ] consider extra features and which dependencies they add
-
 - [x] windows compatibility
 - [x] copy activation command on exit
 - [x] config file
-
   - [x] shell to use for activation command
   - [x] default path to look for virtual environmnts
-
-- [ ] Index the virtual environments or save the parsed result so it doesn't take too long to load
+- [x] Cache the parsing results to improve startup times
+  - [x] reload venvs to update caches
+  - [x] automatically detect changes of venvs and update cache
 
 ## License
 

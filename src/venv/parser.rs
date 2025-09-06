@@ -1,6 +1,7 @@
 use std::{
-    fs,
-    path::{Path, PathBuf},
+    fs::{self, File},
+    io::{BufRead, BufReader},
+    path::PathBuf,
 };
 
 use color_eyre::{
@@ -18,123 +19,160 @@ use crate::venv::{
 
 use super::utils::{get_packages, package_pairs};
 
-pub fn parse_config_file_contents(contents: String) -> String {
-    contents
-        .lines()
-        .find(|l| l.trim_start().starts_with("version"))
-        .expect("Could not find version in config")
-        .split('=')
-        .nth(1)
-        .map(|v| v.trim().to_string())
-        .unwrap()
+pub struct VenvParser {
+    dir: PathBuf,
+    cfg: Option<String>,
+    version: Option<String>,
+    pub dist_info_packages: Option<Vec<PathBuf>>,
+    package_dirs: Option<Vec<PathBuf>>,
 }
 
-pub fn parse_metadata(dist_info_path: PathBuf) -> Result<Metadata> {
-    // TODO: json config file in the future
-    let metadata_path = dist_info_path.join("METADATA");
-    let metadata_contents = fs::read_to_string(&metadata_path)
-        .with_context(|| {
-            format!(
-                "Failed to read metadata file at {}",
-                metadata_path.display()
-            )
-        })?
-        .replace("\r\n", "\n");
-    // WARN: hack above is for linux. needs a cross-platform solution
-
-    let mut header = Vec::new();
-
-    for line in metadata_contents.lines() {
-        if line.trim().is_empty() {
-            break;
+impl VenvParser {
+    /// Creates a VenvParser. `dir` must point to a virtual environment.
+    pub fn new(dir: PathBuf) -> Self {
+        Self {
+            dir,
+            cfg: None,
+            version: None,
+            dist_info_packages: None,
+            package_dirs: None,
         }
-        header.push(line);
     }
 
-    let tokens: Vec<MetadataTokens> = header
-        .iter()
-        .filter_map(|line| line.split_once(": "))
-        .filter_map(|(key, value)| match key {
-            "Name" => Some(MetadataTokens::Name(value.to_string())),
-            "Version" => Some(MetadataTokens::Version(value.to_string())),
-            "Summary" => Some(MetadataTokens::Summary(value.to_string())),
-            "Requires-Dist" => Some(MetadataTokens::Dependency(value.to_string())),
-            _ => None, // skip unknown keys
-        })
-        .collect();
+    /// Convenience function for parsing virtual environments. Use this one unless otherwise.
+    pub fn parse_from_dir(dir: PathBuf) -> Result<Venv> {
+        let dir = dunce::canonicalize(dir)?;
+        VenvParser::new(dir)
+            .read_config()?
+            .parse_version()?
+            .discover_packages()?
+            .parse()
+    }
 
-    let metadata = Metadata::parse_tokens(tokens)?;
+    /// Reads contents of the `pyvenv.cfg` file
+    fn read_config(mut self) -> Result<Self> {
+        let cfg_path = self.dir.join("pyvenv.cfg");
+        let contents = fs::read_to_string(&cfg_path)?;
+        self.cfg = Some(contents);
+        Ok(self)
+    }
 
-    // TODO: return the builder because we are not done with dependencies yet
-    Ok(metadata)
-}
-// expects dir to be a virtual environment
-pub fn parse_from_dir(dir: &Path) -> Result<Venv> {
-    let dir = dunce::canonicalize(dir)?;
-    if !dir.is_dir() {
-        Err(eyre::eyre!("{} is not directory.", dir.display()))
-    } else {
-        // println!("Reading dir: {}", dir.to_str().unwrap());
-        let pyvevnv_cfg_file = dir.join("pyvenv.cfg");
+    /// Finds the python version located in `pyvenv.cfg` file. Use this after calling `read_config`
+    /// first.
+    fn parse_version(mut self) -> Result<Self> {
+        self.version = Some(
+            self.cfg
+                .as_mut()
+                .unwrap()
+                .lines()
+                .find(|l| l.trim_start().starts_with("version"))
+                .expect("Could not find version in config")
+                .split('=')
+                .nth(1)
+                .map(|v| v.trim().to_string())
+                .unwrap(),
+        );
+        Ok(self)
+    }
 
-        let cfg_contents = fs::read_to_string(&pyvevnv_cfg_file)
-            .with_context(|| format!("Failed to read {}", pyvevnv_cfg_file.display()))?;
-
-        let version = parse_config_file_contents(cfg_contents);
-        // println!("Python version: {version}");
-
-        let is_windows = cfg!(windows);
-
-        let binaries = if is_windows {
-            dir.join("Scripts")
-        } else {
-            dir.join("bin")
-        };
-
-        // println!("Binary directory: {}", binaries.to_str().unwrap());
-
-        let lib_dir = if is_windows {
-            dir.join("Lib")
-        } else {
-            dir.join("lib")
-        };
-
-        let site_packages = if is_windows {
-            lib_dir.join("site-packages")
-        } else {
-            let python_dir = get_python_dir(lib_dir)?.ok_or_else(|| {
-                eyre::eyre!("Could not find python version directory under '/lib'")
-            })?;
-            python_dir.join("site-packages")
-        };
-
-        // println!("{}", site_packages.to_string_lossy());
+    /// Finds packages in the virtual environment
+    pub fn discover_packages(mut self) -> Result<Self> {
+        let site_packages = self.site_packages_path()?;
         let (dist_info_packages, package_dirs) =
             get_packages(site_packages).wrap_err("Could not read 'dist-info' directories")?;
 
         if dist_info_packages.is_empty() {
             return Err(eyre::eyre!("No dist-info packages found in the venv"));
         }
+        self.dist_info_packages = Some(dist_info_packages);
+        self.package_dirs = Some(package_dirs);
+        Ok(self)
+    }
 
-        let pairs = package_pairs(dist_info_packages, package_dirs);
+    /// Parses the packages and their info. Both `parse_version` and `discover_packages` must be
+    /// called before calling `parse`.
+    fn parse(self) -> Result<Venv> {
+        let venv_name = self.venv_name();
+        let version = self.version.clone().unwrap();
+        let binaries = self.binaries_path();
+
+        let pairs = package_pairs(self.dist_info_packages.unwrap(), self.package_dirs.unwrap());
         let (packages, num_pkg) =
             parse_package_pairs(pairs).context("Error while parsing pairs")?;
 
         let venv_size = dir_size::ParallelReader
-            .get_dir_size(&dir)
+            .get_dir_size(&self.dir)
             .context("Could not get venv size")?;
 
         let v = Venv::new(
-            dir.file_stem().unwrap().to_str().unwrap(),
-            version,
-            venv_size,
-            packages,
-            num_pkg,
-            binaries,
-            dir.to_path_buf(),
+            &venv_name, version, venv_size, packages, num_pkg, binaries, self.dir,
         );
         Ok(v)
     }
+
+    fn venv_name(&self) -> String {
+        let stem = self.dir.file_stem().unwrap();
+        stem.to_str().unwrap().to_string()
+    }
+
+    fn binaries_path(&self) -> PathBuf {
+        if cfg!(windows) {
+            self.dir.join("Scripts")
+        } else {
+            self.dir.join("bin")
+        }
+    }
+
+    fn lib_path(&self) -> PathBuf {
+        if cfg!(windows) {
+            self.dir.join("Lib")
+        } else {
+            self.dir.join("lib")
+        }
+    }
+
+    fn site_packages_path(&self) -> Result<PathBuf> {
+        let lib_dir = self.lib_path();
+        if cfg!(windows) {
+            Ok(lib_dir.join("site-packages"))
+        } else {
+            let python_dir = get_python_dir(lib_dir)?.ok_or_else(|| {
+                eyre::eyre!("Could not find python version directory under '/lib'")
+            })?;
+            Ok(python_dir.join("site-packages"))
+        }
+    }
+}
+
+pub fn parse_metadata(dist_info_path: PathBuf) -> Result<Metadata> {
+    let metadata_path = dist_info_path.join("METADATA");
+    let file = File::open(&metadata_path).with_context(|| {
+        format!(
+            "Failed to open metadata file at {}",
+            metadata_path.display()
+        )
+    })?;
+    let reader = BufReader::new(file);
+
+    let mut tokens = Vec::new();
+
+    for line in reader.lines() {
+        let line = line?;
+        let line = line.trim_end_matches(&['\r', '\n'][..]); // normalize newlines
+
+        if let Some((key, value)) = line.split_once(": ") {
+            match key {
+                "Name" => tokens.push(MetadataTokens::Name(value.to_string())),
+                "Version" => tokens.push(MetadataTokens::Version(value.to_string())),
+                "Summary" => tokens.push(MetadataTokens::Summary(value.to_string())),
+                "Requires-Dist" => tokens.push(MetadataTokens::Dependency(value.to_string())),
+                _ => {}
+            }
+        }
+    }
+
+    let metadata = Metadata::parse_tokens(tokens)?;
+    Ok(metadata)
 }
 
 fn parse_package_pairs(
@@ -216,8 +254,6 @@ fn get_package_size(pkg: &Option<PathBuf>) -> u64 {
     }
 }
 
-// fn insert_dependencies(packages: &Vec<Rc<Package>>) {}
-
 #[cfg(test)]
 mod tests {
     use std::io::Write;
@@ -226,7 +262,7 @@ mod tests {
     use super::*;
     use std::{collections::HashSet, fs::File};
 
-      #[test]
+    #[test]
     fn test_parse_metadata() -> Result<()> {
         // 1. Create a temporary directory.
         let dir = tempdir().unwrap();
@@ -373,7 +409,7 @@ Dynamic: license-file
         write!(metadata_file, "{pip_metadata}\n\n").unwrap();
 
         // 2. Call parse_from_dir
-        let venv_result = parse_from_dir(venv_dir.path());
+        let venv_result = VenvParser::parse_from_dir(venv_dir.path().to_path_buf());
         assert!(venv_result.is_ok());
         let venv = venv_result.unwrap();
 

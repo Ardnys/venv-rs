@@ -2,8 +2,6 @@ use std::collections::HashSet;
 
 use bincode::{Decode, Encode};
 
-pub const METADATA_FEATURES: [&str; 4] = ["Name", "Version", "Summary", "Requires-Dist"];
-
 #[derive(Debug)]
 pub enum MetadataTokens {
     Name(String),

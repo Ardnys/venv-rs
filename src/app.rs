@@ -55,8 +55,6 @@ impl App {
         Self {
             running: true,
             events: EventHandler::new(),
-            // TODO: constructor should receive the venv_list.
-            // it does not care about how venv_list is created
             venv_list: VenvListUi::new(venvs),
             vm,
             venv_index: 0,
@@ -74,6 +72,8 @@ impl App {
             terminal.draw(|frame| frame.render_widget(&mut self, frame.area()))?;
             self.handle_events()?;
         }
+        // save cache before exit
+        self.vm.save_cache()?;
         Ok(self.output)
     }
 
