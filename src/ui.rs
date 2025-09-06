@@ -57,7 +57,7 @@ impl Widget for &mut App {
             .padding(Padding::left(1));
 
         let footer_text = String::from(
-            "Exit: q | Movement: hjkl or ↓ ↑ ← → | Activate: a | Requirements: r | Help: ?",
+            "Exit: q | Movement: hjkl or ↓ ↑ ← → | Activate: a | Requirements: r | Update: u | Help: ?",
         );
 
         let footer = Paragraph::new(footer_text)
