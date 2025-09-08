@@ -76,10 +76,9 @@ impl TryFrom<String> for Shell {
 impl Settings {
     pub fn normalize_paths(mut self) -> Self {
         if let Some(venvs_dir) = &self.venvs_dir {
-            // Expand ~
             let expanded = shellexpand::tilde(venvs_dir).into_owned();
 
-            let canon = fs::canonicalize(&expanded).unwrap_or(PathBuf::from(expanded));
+            let canon = dunce::canonicalize(&expanded).unwrap_or(PathBuf::from(expanded));
 
             self.venvs_dir = Some(canon.to_string_lossy().into_owned());
         }

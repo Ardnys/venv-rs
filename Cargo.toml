@@ -20,6 +20,7 @@ dirs = "6"
 dunce = "1"
 bincode = "2"
 shellexpand = "3.1"
+chrono = "0.4"
 
 [dev-dependencies]
 criterion = { version = "0.7", features = ["html_reports"] }

@@ -37,7 +37,11 @@ venv-rs is a high level Python virtual environment manager specifically develope
   - [x] default path to look for virtual environmnts
 - [x] Cache the parsing results to improve startup times
   - [x] reload venvs to update caches
+    - [ ] reload a single venv ("u" key)
+    - [ ] sync on command ("U" key)
   - [x] automatically detect changes of venvs and update cache
+  - [x] check cache updates in a separate thread
+- [x] display Package and Venv's last modified dates
 
 ## License
 

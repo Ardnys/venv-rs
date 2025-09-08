@@ -1,18 +1,21 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::BTreeMap,
     fs::{self},
     path::{Path, PathBuf},
-    rc::Rc,
     str::FromStr,
+    sync::{Arc, RwLock, mpsc::Sender},
+    thread::{self, JoinHandle},
+    time::SystemTime,
 };
 
 use bincode::{Decode, Encode, config};
+use chrono::{DateTime, Local};
 use color_eyre::Result;
 use color_eyre::eyre;
 use dirs::cache_dir;
 use ratatui::widgets::{ListState, ScrollbarState};
 
-use crate::venv::metadata::Metadata;
+use crate::{app::SyncMsg, venv::metadata::Metadata};
 
 use super::parser::VenvParser;
 
@@ -29,9 +32,10 @@ pub struct Venv {
 
 #[derive(Debug, Clone)]
 pub struct VenvUi {
-    pub venv: Rc<Venv>,
+    pub venv: Arc<Venv>,
     pub list_state: ListState,
     pub scroll_state: ScrollbarState,
+    pub last_modified: DateTime<Local>,
 }
 
 #[derive(Debug, Clone, Encode, Decode)]
@@ -40,6 +44,7 @@ pub struct Package {
     pub version: String,
     pub size: u64,
     pub metadata: Metadata,
+    pub last_modified: SystemTime,
 }
 
 #[derive(Debug, Clone)]
@@ -50,12 +55,19 @@ pub struct VenvListUi {
 }
 
 impl Package {
-    pub fn new(name: &str, version: &str, size: u64, metadata: Metadata) -> Self {
+    pub fn new(
+        name: &str,
+        version: &str,
+        size: u64,
+        metadata: Metadata,
+        last_modified: SystemTime,
+    ) -> Self {
         Self {
             name: name.to_string(),
             version: version.to_string(),
             size,
             metadata,
+            last_modified,
         }
     }
 }
@@ -158,18 +170,31 @@ impl Venv {
 }
 
 impl VenvUi {
-    pub fn new(venv: Rc<Venv>) -> Self {
+    pub fn new(venv: Arc<Venv>, last_modified: DateTime<Local>) -> Self {
         Self {
             scroll_state: ScrollbarState::new(venv.packages.len()),
-            venv,
             list_state: ListState::default().with_selected(Some(0)),
+            last_modified,
+            venv,
         }
     }
 }
 
 impl VenvListUi {
-    pub fn new(venvs: Vec<Rc<Venv>>) -> Self {
-        let venvs_ui: Vec<VenvUi> = venvs.into_iter().map(VenvUi::new).collect();
+    pub fn new(venvs: Vec<Arc<Venv>>) -> Self {
+        let venvs_ui: Vec<VenvUi> = venvs
+            .into_iter()
+            .map(|v| {
+                let last_modified = v
+                    .packages
+                    .iter()
+                    .map(|pkg| pkg.last_modified)
+                    .max()
+                    .unwrap_or(SystemTime::UNIX_EPOCH);
+                let date: DateTime<Local> = last_modified.into();
+                VenvUi::new(v, date)
+            })
+            .collect();
         Self {
             list_state: ListState::default().with_selected(Some(0)),
             scroll_state: ScrollbarState::new(venvs_ui.len()),
@@ -193,7 +218,7 @@ fn to_cache_path(venv_path: &Path, cache_dir: &Path) -> Option<PathBuf> {
 
 #[derive(Debug)]
 pub struct VenvManager {
-    cache: BTreeMap<PathBuf, Rc<Venv>>,
+    cache: BTreeMap<PathBuf, Arc<Venv>>,
     cache_path: PathBuf,
 }
 
@@ -217,6 +242,83 @@ impl VenvManager {
         }
     }
 
+    pub fn threaded_sync(vm_arc: Arc<RwLock<Self>>, sender: Sender<SyncMsg>) -> JoinHandle<()> {
+        thread::spawn(move || {
+            let _ = sender.send(SyncMsg::Started);
+
+            // get the entires with a read lock
+            let snapshot: Vec<(PathBuf, Arc<Venv>)> = {
+                let vm_r = vm_arc.read().expect("rwlock poisoned");
+                vm_r.cache
+                    .iter()
+                    .map(|(p, v)| (p.clone(), Arc::clone(v)))
+                    .collect()
+            };
+
+            // check for stale venvs off lock
+            for (path, cached_venv) in snapshot {
+                let _ = sender.send(SyncMsg::Progress {
+                    venv: cached_venv.name.clone(),
+                });
+
+                let cached_most_recent = cached_venv
+                    .packages
+                    .iter()
+                    .map(|pkg| pkg.last_modified)
+                    .max()
+                    .unwrap_or(SystemTime::UNIX_EPOCH);
+
+                // compute most recent on-disk dist-info mtime (expensive, but off-lock)
+                let most_recent_on_disk =
+                    match VenvParser::new(path.clone()).recent_dist_info_modification() {
+                        Ok(t) => t,
+                        Err(e) => {
+                            // If we can't stat the directory, report an error and skip updating
+                            let _ = sender.send(SyncMsg::Error(format!(
+                                "Failed to stat dist-info for {}: {}",
+                                path.display(),
+                                e
+                            )));
+                            // continue to next venv
+                            continue;
+                        }
+                    };
+                // decide if stale
+                if cached_most_recent < most_recent_on_disk {
+                    // expensive parse (off-lock)
+                    match Venv::from_path(&path) {
+                        Ok(new_venv) => {
+                            // short write lock to update the cache atomically
+                            {
+                                let mut vm_w = vm_arc.write().expect("rwlock poisoned");
+                                vm_w.cache.insert(path.clone(), Arc::new(new_venv));
+                            }
+                            let _ = sender.send(SyncMsg::VenvUpdated(cached_venv.name.clone()));
+                        }
+                        Err(e) => {
+                            let _ = sender.send(SyncMsg::Error(format!(
+                                "Failed to parse {}: {}",
+                                path.display(),
+                                e
+                            )));
+                        }
+                    }
+                } else {
+                    // no change — optionally still notify so UI can clear spinner
+                    let _ = sender.send(SyncMsg::VenvUpdated(cached_venv.name.clone()));
+                }
+            }
+            // optionally save cache at the end under read lock (assuming save reads cache)
+            {
+                let vm_r = vm_arc.read().expect("rwlock poisoned");
+                if let Err(e) = vm_r.save_cache() {
+                    let _ = sender.send(SyncMsg::Error(format!("Failed to save cache: {}", e)));
+                }
+            }
+            let _ = sender.send(SyncMsg::Finished);
+        })
+    }
+
     pub fn venvs_from_cache(&self) -> Result<Vec<Venv>> {
         fs::read_dir(&self.cache_path)?
             .filter_map(Result::ok)
@@ -229,7 +331,7 @@ impl VenvManager {
         if let Ok(venvs) = self.venvs_from_cache() {
             self.cache = venvs
                 .into_iter()
-                .map(|v| (v.path.clone(), Rc::new(v)))
+                .map(|v| (v.path.clone(), Arc::new(v)))
                 .collect();
         }
         Ok(())
@@ -245,8 +347,12 @@ impl VenvManager {
         Ok(())
     }
 
-    pub fn get(&mut self, p: &Path) -> Result<Rc<Venv>> {
-        if !self.cache.contains_key(p) || self.is_venv_stale(p) {
+    pub fn get(&mut self, p: &Path) -> Result<Arc<Venv>> {
+        // println!("Getting {}", p.to_string_lossy().yellow().italic());
+        let kee = self.cache.contains_key(p);
+        // let stale = self.is_venv_stale(p);
+        // println!("Contains: {kee}, Stale: {stale}");
+        if !kee {
             let venv = Venv::from_path(p)?;
             self.cache.insert(p.to_path_buf(), venv.into());
         }
@@ -259,45 +365,44 @@ impl VenvManager {
         Ok(())
     }
 
-    pub fn is_venv_stale(&self, p: &Path) -> bool {
-        let v = self.cache.get(p).unwrap();
-        // create a lookup map for package versions
-        let venv_package_lookup: HashMap<&str, &str> = v
-            .packages
-            .iter()
-            .map(|p| (p.name.as_ref(), p.version.as_ref()))
+    pub fn sync_cache(&mut self) {
+        // Collect keys to update to avoid mutable/immutable borrow conflict
+        let keys_to_update: Vec<PathBuf> = self
+            .cache
+            .keys()
+            .filter(|k| self.is_venv_stale(k))
+            .cloned()
             .collect();
 
-        // get the package files to check the versions, if they changed
-        let mut parser = VenvParser::new(p.to_path_buf());
-        parser = parser
-            .discover_packages()
-            .expect("Could not discover packages");
-        let new_dist_info = parser.dist_info_packages.unwrap();
-
-        for di in new_dist_info.into_iter() {
-            // dist-info anatomy {name}-{version}.dist-info
-            let di_fname = di.file_name().and_then(|n| n.to_str()).unwrap_or("");
-
-            let without_suffix = di_fname.strip_suffix(".dist-info").unwrap();
-
-            let (name_part, version) = without_suffix
-                .split_once("-")
-                .expect("Could not split dist-info");
-
-            if let Some(&cached_version) = venv_package_lookup.get(&name_part) {
-                if cached_version != version {
-                    return true;
-                }
-            } else {
-                // new package, also stale
-                return true;
-            }
+        for k in keys_to_update {
+            let venv = Venv::from_path(&k).unwrap();
+            self.cache.insert(k, venv.into());
         }
-        false
     }
 
-    pub fn get_venvs(&self) -> Vec<Rc<Venv>> {
+    pub fn is_venv_stale(&self, p: &Path) -> bool {
+        if !self.cache.contains_key(p) {
+            return true;
+        }
+        let v = self.cache.get(p).unwrap();
+
+        let last_modified = v
+            .packages
+            .iter()
+            .map(|p| p.last_modified)
+            .max()
+            .unwrap_or(SystemTime::UNIX_EPOCH);
+
+        // get the package files to check the versions, if they changed
+        let parser = VenvParser::new(p.to_path_buf());
+        let most_recent_update = parser
+            .recent_dist_info_modification()
+            .expect("Failed to get recent update");
+
+        last_modified < most_recent_update
+    }
+
+    pub fn get_venvs(&self) -> Vec<Arc<Venv>> {
         self.cache.values().cloned().collect()
     }
 }

@@ -8,12 +8,6 @@ use crate::{
 };
 
 pub fn activation(shell: Shell, config: Settings, path_buf: PathBuf) -> Result<()> {
-    // I usually use Git Bash on windows which works with bash style activation and paths
-    // That's why I need this goofy setting
-    #[cfg(windows)]
-    let peak_git_bash_experience =
-        cfg!(windows) && !matches!(shell, Shell::CMD | Shell::POWERSHELL);
-
     #[cfg(windows)]
     let mut activation_command = shell.activation(path_buf.to_string_lossy());
 
@@ -23,6 +17,14 @@ pub fn activation(shell: Shell, config: Settings, path_buf: PathBuf) -> Result<(
     // Apply platform-specific tweaks
     #[cfg(windows)]
     {
+        // mute the config variable on windows
+        let _ = config;
+        // I usually use Git Bash on windows which works with bash style activation and paths
+        // That's why I need this goofy setting
+        #[cfg(windows)]
+        let peak_git_bash_experience =
+            cfg!(windows) && !matches!(shell, Shell::CMD | Shell::POWERSHELL);
+
         if peak_git_bash_experience {
             activation_command = activation_command.replace("/", "\\").replace("\\", "\\\\");
         }
@@ -54,5 +56,6 @@ pub fn activation(shell: Shell, config: Settings, path_buf: PathBuf) -> Result<(
     {
         println!("\n{}\n\n {}", banner, highlighted_cmd);
         clipboard::copy_to_clipboard(&activation_command)?;
+        Ok(())
     }
 }

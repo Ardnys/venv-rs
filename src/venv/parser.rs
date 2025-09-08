@@ -2,6 +2,7 @@ use std::{
     fs::{self, File},
     io::{BufRead, BufReader},
     path::PathBuf,
+    time::SystemTime,
 };
 
 use color_eyre::{
@@ -87,6 +88,28 @@ impl VenvParser {
         self.dist_info_packages = Some(dist_info_packages);
         self.package_dirs = Some(package_dirs);
         Ok(self)
+    }
+
+    /// Gets the most recent modification timestamp among all `.dist-info` directories
+    pub fn recent_dist_info_modification(&self) -> Result<SystemTime> {
+        let dir = self.site_packages_path()?;
+        let mut latest = SystemTime::UNIX_EPOCH;
+
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+
+            // only check `.dist-info` directories
+            if path.extension().and_then(|e| e.to_str()) == Some("dist-info") {
+                // get the metadata from entry itself, which is cheaper
+                let modified = entry.metadata()?.modified()?;
+                if modified > latest {
+                    latest = modified;
+                }
+            }
+        }
+
+        Ok(latest)
     }
 
     /// Parses the packages and their info. Both `parse_version` and `discover_packages` must be
@@ -200,11 +223,18 @@ fn parse_package_pairs(
             0
         };
 
+        let last_modified = if let Some(d) = dist_info {
+            fs::metadata(d)?.modified()?
+        } else {
+            SystemTime::now()
+        };
+
         let package = Package::new(
             &metadata.name,
             &metadata.version,
             package_size + dist_info_size,
             metadata.clone(),
+            last_modified,
         );
         // println!("pck: {:?}", package);
 
