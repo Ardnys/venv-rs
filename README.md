@@ -1,13 +1,21 @@
 # venv-rs
 
 venv-rs is a high level Python virtual environment manager specifically developed for [my personal workflow and needs](https://ardnys.github.io/projects/venv-manager/).
+<div align="center">
+  <img src="https://raw.githubusercontent.com/Ardnys/venv-rs/refs/heads/refactor/images/venv_rs_logo.png" width=300 height=300 />
+</div>
 
-> [!WARNING]
-> this project is in heavy development. i keep adding, removing, breaking and changing things.
-> scope may change as well so even take this README with a generous sprinkle of top quality Himalayan salt. _crunch crunch_
+# Demo
+## Inspect your virtualenvs directory
+<img src="https://raw.githubusercontent.com/Ardnys/venv-rs/refs/heads/refactor/images/venvs_demo.gif" />
 
-## Features
+## Inspect a single virtual environment
+<img src="https://raw.githubusercontent.com/Ardnys/venv-rs/refs/heads/refactor/images/venv_demo.gif" />
 
+## Search for virtual environments
+<img src="https://raw.githubusercontent.com/Ardnys/venv-rs/refs/heads/refactor/images/search_demo.gif" />
+
+# Features
 - Shows virtual environments, their size on disk, number of packages
 - Shows packages, versions, and sizes on disk
 - Copies activation command on exit
@@ -15,8 +23,49 @@ venv-rs is a high level Python virtual environment manager specifically develope
 - Cross platform. I use it in both Command Prompt and Git Bash on Windows.
 - Kind of satisfying to use imo
 
-## Roadmap
+# Usage
+```
+Usage: venv-rs [OPTIONS] <COMMAND>
 
+Commands:
+  venv         Inspect a single virtual environment
+  search       Search virtual environments recursively
+  venvs        Directory containing virtual environments
+  list-shells  List available shells [aliases: ls]
+  help         Print this message or the help of the given subcommand(s)
+
+Options:
+  -s, --shell <SHELL>  Shell for the activation command
+  -h, --help           Print help
+  -V, --version        Print version
+```
+Press "?" in TUI for the help screen.
+
+# Configuration
+Currently there's minimal configuration mostly to set preferences to shorten the commands. An example config is below:
+```yaml
+# put it in $XDG_CONFIG_HOME/venv-rs/config.yaml if it doesn't exist already
+shell: "zsh" 
+venvs_dir: "~/.virtualenvs"
+extra:
+  xclip: true # for linux
+```
+> [!Tip]
+Check supported shells with `venv-rs ls` command.
+
+
+With the config above the command
+```bash
+$ venv-rs venvs
+```
+is equivalent to
+```bash
+$ venv-rs -s zsh venvs ~/.virtualenvs
+```
+> [!Tip]
+CLI arguments have priority over configuration options.
+
+# Roadmap
 - [x] show packages in the venv
 - [x] show package versions and sizes
 - [x] human readable byte sizes
@@ -45,7 +94,7 @@ venv-rs is a high level Python virtual environment manager specifically develope
   - [ ] command to clean up cache
 - [x] display Package and Venv's last modified dates
 
-## License
+# License
 
 Copyright (c) Ardnys
 
