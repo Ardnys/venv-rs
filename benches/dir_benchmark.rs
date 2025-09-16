@@ -1,6 +1,6 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::path::Path;
-use venv_rs::dir_size::{Chonk, IterativeReader, ParallelReader, RecursiveReader};
+use venv_rs_lib::dir_size::{Chonk, IterativeReader, ParallelReader, RecursiveReader};
 
 fn bench_recursive(c: &mut Criterion) {
     let path = Path::new(".");

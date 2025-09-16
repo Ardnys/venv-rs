@@ -1,23 +1,71 @@
 # venv-rs
 
-venv-rs is a high level Python virtual environment manager specifically developed for my personal workflow and needs.
+venv-rs is a high level Python virtual environment manager specifically developed for [my personal workflow and needs](https://ardnys.github.io/projects/venv-manager/).
+<div align="center">
+  <img src="https://raw.githubusercontent.com/Ardnys/venv-rs/refs/heads/refactor/images/venv_rs_logo.png" width=300 height=300 />
+</div>
 
-My python virtual environments easily get out of hand, especially when I work on AI projects. I get confused and end up with 5 pytorch installations taking half of my disk space. It's difficult to manage manually with terminal and file explorer. Thus, this weird thing has been developed!
+# Demo
+## Inspect your virtualenvs directory
+<img src="https://raw.githubusercontent.com/Ardnys/venv-rs/refs/heads/refactor/images/venvs_demo.gif" />
 
-Basically this will show me an overview of my virtual environments so I can keep them tidy.
+## Inspect a single virtual environment
+<img src="https://raw.githubusercontent.com/Ardnys/venv-rs/refs/heads/refactor/images/venv_demo.gif" />
 
-> [!WARNING]
-this project is in heavy development. i keep adding, removing, breaking and changing things.
-scope may change as well so even take this README with a generous sprinkle of top quality Himalayan salt. _crunch crunch_
+## Search for virtual environments
+<img src="https://raw.githubusercontent.com/Ardnys/venv-rs/refs/heads/refactor/images/search_demo.gif" />
 
-## Features
+# Features
 - Shows virtual environments, their size on disk, number of packages
 - Shows packages, versions, and sizes on disk
-- Prints activation command on exit
+- Copies activation command on exit
 - Prints requirements.txt so you don't have to activate it and print it manually
+- Cross platform. I use it in both Command Prompt and Git Bash on Windows.
 - Kind of satisfying to use imo
 
-## Roadmap
+# Usage
+```
+Usage: venv-rs [OPTIONS] <COMMAND>
+
+Commands:
+  venv         Inspect a single virtual environment
+  search       Search virtual environments recursively
+  venvs        Directory containing virtual environments
+  list-shells  List available shells [aliases: ls]
+  help         Print this message or the help of the given subcommand(s)
+
+Options:
+  -s, --shell <SHELL>  Shell for the activation command
+  -h, --help           Print help
+  -V, --version        Print version
+```
+Press "?" in TUI for the help screen.
+
+# Configuration
+Currently there's minimal configuration mostly to set preferences to shorten the commands. An example config is below:
+```yaml
+# put it in $XDG_CONFIG_HOME/venv-rs/config.yaml if it doesn't exist already
+shell: "zsh" 
+venvs_dir: "~/.virtualenvs"
+extra:
+  xclip: true # for linux
+```
+> [!Tip]
+Check supported shells with `venv-rs ls` command.
+
+
+With the config above the command
+```bash
+$ venv-rs venvs
+```
+is equivalent to
+```bash
+$ venv-rs -s zsh venvs ~/.virtualenvs
+```
+> [!Tip]
+CLI arguments have priority over configuration options.
+
+# Roadmap
 - [x] show packages in the venv
 - [x] show package versions and sizes
 - [x] human readable byte sizes
@@ -27,21 +75,30 @@ scope may change as well so even take this README with a generous sprinkle of to
 - [x] remove anyhow
 - [x] walk the directory tree and look for .env folders. that way i don't have to limit to this particular workflow.
 - [x] parse package dependencies
-    - [ ] add them to the package size
-    - [x] show dependencies in UI
-    - [ ] consider extra features and which dependencies they add
-- [ ] windows compatibility
-- [ ] popup confirmation as a flag
-- [ ] config file
-    - [ ] configure which shells are printed
-    - [ ] configure table printing or plain text printing
+  - [ ] add them to the package size
+  - [ ] implement petgraph for dependencies
+  - [x] show dependencies in UI
+  - [ ] consider extra features and which dependencies they add
+- [x] windows compatibility
+- [x] copy activation command on exit
+- [x] config file
+  - [x] shell to use for activation command
+  - [x] default path to look for virtual environmnts
+- [x] Cache the parsing results to improve startup times
+  - [x] reload venvs to update caches
+    - [ ] reload a single venv ("u" key)
+    - [ ] sync on command ("U" key)
+  - [ ] cache with unique ids so venvs with same names don't collide
+  - [x] automatically detect changes of venvs and update cache
+  - [x] check cache updates in a separate thread
+  - [ ] command to clean up cache
+- [x] display Package and Venv's last modified dates
 
-[Ratatui]: https://ratatui.rs
-
-## License
+# License
 
 Copyright (c) Ardnys
 
-This project is licensed under the MIT license ([LICENSE] or <http://opensource.org/licenses/MIT>)
+This project is licensed under the MIT license ([LICENSE][LICENSE] or [http://opensource.org/licenses/MIT](http://opensource.org/licenses/MIT))
 
+[Ratatui]: https://ratatui.rs
 [LICENSE]: ./LICENSE

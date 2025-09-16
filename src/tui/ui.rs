@@ -1,16 +1,17 @@
+use crate::dir_size::{Chonk, ParallelReader};
+use chrono::{DateTime, Local};
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span, Text},
     widgets::{
-        Block, Borders, Clear, HighlightSpacing, List, ListItem, Padding, Paragraph, Scrollbar,
-        ScrollbarOrientation, StatefulWidget, Widget, Wrap,
+        Block, Borders, Clear, HighlightSpacing, LineGauge, List, ListItem, Padding, Paragraph,
+        Scrollbar, ScrollbarOrientation, StatefulWidget, Widget, Wrap,
     },
 };
-use venv_rs::dir_size::{Chonk, ParallelReader};
 
-use crate::app::App;
+use crate::tui::App;
 
 const PANEL_STYLE: Style = Style::new().fg(Color::White);
 const FOCUSED_PANEL_STYLE: Style = Style::new().fg(Color::Green);
@@ -47,6 +48,13 @@ impl Widget for &mut App {
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .areas(pkg_details_layout);
 
+        let sync_size = if self.syncing { 3 } else { 0 };
+
+        let [pkg_dependencies, progress] = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Percentage(100), Constraint::Min(sync_size)])
+            .areas(pkg_dependencies);
+
         let [venv_layout, venv_details_layout] = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
@@ -57,7 +65,7 @@ impl Widget for &mut App {
             .padding(Padding::left(1));
 
         let footer_text = String::from(
-            "Exit: q | Movement: hjkl or arrow keys | Activate: a | Requirements: r | Help: ?",
+            "Exit: q | Movement: hjkl or ↓ ↑ ← → | Activate: a | Requirements: r | Update: u | Help: ?",
         );
 
         let footer = Paragraph::new(footer_text)
@@ -73,8 +81,16 @@ impl Widget for &mut App {
         self.render_package_dependencies(pkg_dependencies, buf);
         self.render_venv_details(venv_details_layout, buf);
 
+        if self.syncing {
+            self.render_sync_text(progress, buf);
+        }
+
         if self.show_help {
             self.render_help(area, buf);
+        }
+
+        if self.maybe_error.is_some() {
+            self.render_error(area, buf);
         }
     }
 }
@@ -94,7 +110,7 @@ impl App {
             .title(Line::raw("Virtual Environments").centered())
             .borders(Borders::ALL)
             .border_style(match self.current_focus {
-                crate::app::Panel::Venv => FOCUSED_PANEL_STYLE,
+                super::app::Panel::Venv => FOCUSED_PANEL_STYLE,
                 _ => PANEL_STYLE,
             });
 
@@ -102,7 +118,7 @@ impl App {
             .venv_list
             .venvs
             .iter()
-            .map(|venv| ListItem::from(venv.name.clone()))
+            .map(|vui| ListItem::from(vui.venv.name.clone()))
             .collect();
 
         let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
@@ -136,15 +152,16 @@ impl App {
             .title(Line::raw("Packages").centered())
             .borders(Borders::ALL)
             .border_style(match self.current_focus {
-                crate::app::Panel::Packages => FOCUSED_PANEL_STYLE,
+                super::app::Panel::Packages => FOCUSED_PANEL_STYLE,
                 _ => PANEL_STYLE,
             });
 
-        let mut v = self.get_selected_venv();
+        let mut v = self.get_selected_venv_ui();
         let style = Style::default();
         let no_dependency_style = Style::default().magenta().italic();
 
         let items: Vec<ListItem> = v
+            .venv
             .packages
             .iter()
             .map(|pack| {
@@ -193,6 +210,9 @@ impl App {
         let package = self.get_selected_package();
         let style = Style::new().yellow().italic();
 
+        let datetime: DateTime<Local> = package.last_modified.into();
+        let fmt_date = datetime.format("%Y-%m-%d %H:%M");
+
         let details = vec![
             Line::from(Span::styled(format!("Name:     {}", package.name), style)),
             Line::from(Span::styled(
@@ -207,6 +227,7 @@ impl App {
                 format!("Size: {}", ParallelReader::formatted_size(package.size)),
                 style,
             )),
+            Line::from(Span::styled(format!("Last Modified: {fmt_date}"), style)),
             if package.metadata.dependencies.is_some() {
                 Line::from(Span::styled(
                     format!(
@@ -262,23 +283,37 @@ impl App {
             .borders(Borders::ALL)
             .border_style(PANEL_STYLE);
 
-        let venv = self.get_selected_venv();
+        let venv = self.get_selected_venv_ui().venv;
         let style = Style::new().light_blue().italic();
+
+        let datetime = self.get_selected_venv_ui_ref().last_modified;
+        let fmt_date = datetime.format("%Y-%m-%d %H:%M");
+
         let details = vec![
-            Line::from(Span::styled(format!("Name:     {}", venv.name), style)),
-            Line::from(Span::styled(format!("Version:  {}", venv.version), style)),
             Line::from(Span::styled(
-                format!("Path:  {}", venv.path.to_string_lossy()),
+                format!("Name:           {}", venv.name),
                 style,
             )),
             Line::from(Span::styled(
-                format!("# of Pkg: {}", venv.num_dist_info_packages),
+                format!("Version:        {}", venv.version),
                 style,
             )),
             Line::from(Span::styled(
-                format!("Size:     {}", ParallelReader::formatted_size(venv.size)),
+                format!("Path:           {}", venv.path.to_string_lossy()),
                 style,
             )),
+            Line::from(Span::styled(
+                format!("# of Pkg:       {}", venv.num_dist_info_packages),
+                style,
+            )),
+            Line::from(Span::styled(
+                format!(
+                    "Size:           {}",
+                    ParallelReader::formatted_size(venv.size)
+                ),
+                style,
+            )),
+            Line::from(Span::styled(format!("Last Modified:  {fmt_date}"), style)),
         ];
 
         let p = Paragraph::new(details)
@@ -323,6 +358,7 @@ impl App {
             ("q", "Exit"),
             ("a", "Activate selected venv"),
             ("r", "Print requirements and exit"),
+            ("u", "Parse the venv and update cache"),
             ("?", "Toggle keybinds"),
         ];
 
@@ -463,5 +499,83 @@ impl App {
         navigation_title.render(navigation_title_layout, buf);
         navigation_keys.render(navigation_key_layout, buf);
         navigation_desc.render(navigation_desc_layout, buf);
+    }
+
+    fn render_error(&mut self, area: Rect, buf: &mut Buffer) {
+        // Create centered rect: 60% width, 70% height
+        let popup_area = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Percentage(15), // top padding
+                Constraint::Percentage(70), // help box
+                Constraint::Percentage(15), // bottom padding
+            ])
+            .split(area)[1];
+
+        let popup_area = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(20), // left padding
+                Constraint::Percentage(60), // help box
+                Constraint::Percentage(20), // right padding
+            ])
+            .split(popup_area)[1];
+
+        // Clear the part where help popup is rendered
+        Clear.render(popup_area, buf);
+
+        let block = Block::new()
+            .title(Line::styled(
+                "! An Error Occured !",
+                Style::new().bold().red(),
+            ))
+            .borders(Borders::ALL)
+            .border_style(FOCUSED_PANEL_STYLE);
+
+        if let Some(rep) = &self.maybe_error {
+            let error_message = rep.to_string();
+            let error_text = Text::styled(error_message.to_string(), Style::new().on_black().red());
+            let error_paragraph = Paragraph::new(error_text)
+                .block(block)
+                .wrap(Wrap { trim: true });
+            error_paragraph.render(popup_area, buf);
+        }
+    }
+
+    fn render_sync_text(&mut self, area: Rect, buf: &mut Buffer) {
+        let block = Block::new()
+            .title("Syncing")
+            .borders(Borders::ALL)
+            .title_alignment(Alignment::Center);
+
+        let current = self.venv_sync_progress as usize;
+        let total = self.total_venvs.max(1) as usize;
+
+        // how wide is the inner area we can use for the label?
+        let inner_width = area.width.saturating_sub(2) as usize;
+
+        // right-side counter string
+        let counter = format!("{current}/{total}");
+
+        let avail = inner_width.saturating_sub(2 + counter.len());
+
+        // build the label with formatting:
+        // "[{name:-<avail}]{counter}"
+        //   → left-align name inside a field of `avail` filled with '-'
+        let label = format!(
+            "[{:-<width$}]{}",
+            self.current_syncing_venv,
+            counter,
+            width = avail
+        );
+
+        let label_line = Line::from(Span::styled(label, Style::new().italic().light_green()));
+        let ratio = current as f64 / total as f64;
+
+        LineGauge::default()
+            .block(block)
+            .ratio(ratio)
+            .label(label_line)
+            .render(area, buf);
     }
 }

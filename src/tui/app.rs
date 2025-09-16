@@ -1,30 +1,27 @@
-use std::{path::PathBuf, process::Command};
+use std::{
+    path::PathBuf,
+    process::Command,
+    sync::{
+        Arc, RwLock,
+        mpsc::{self, Receiver},
+    },
+    thread::JoinHandle,
+};
 
 use crate::{
-    event::{AppEvent, Event, EventHandler},
-    venv::{Venv, VenvList, model::Package},
+    core::VenvManager,
+    tui::{AppEvent, Event, EventHandler, SyncMsg},
+    venv::{
+        VenvListUi,
+        model::{Package, VenvUi},
+    },
 };
+use color_eyre::eyre;
 use crossterm::event::KeyEventKind;
 use ratatui::{
     DefaultTerminal,
     crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
 };
-
-/// Application.
-#[derive(Debug)]
-pub struct App {
-    /// Is the application running?
-    pub running: bool,
-    /// Event handler.
-    pub events: EventHandler,
-    /// List of virtual environments
-    pub venv_list: VenvList,
-    pub venv_index: usize,
-    pub packages_index: usize,
-    pub current_focus: Panel,
-    pub show_help: bool,
-    output: Output,
-}
 
 #[derive(Debug)]
 pub enum Panel {
@@ -42,31 +39,116 @@ pub enum Output {
     None,
 }
 
+/// Application.
+#[derive(Debug)]
+pub struct App {
+    /// Is the application running?
+    pub running: bool,
+    /// Event handler.
+    pub events: EventHandler,
+    /// List of virtual environments
+    pub vm: Arc<RwLock<VenvManager>>,
+    pub venv_list: VenvListUi,
+    pub venv_index: usize,
+    pub packages_index: usize,
+    pub current_focus: Panel,
+    pub show_help: bool,
+    pub maybe_error: Option<eyre::Report>,
+    pub syncing: bool,
+    pub total_venvs: u16,
+    pub venv_sync_progress: u16,
+    pub current_syncing_venv: String,
+    sync_handle: Option<JoinHandle<()>>,
+    sync_rx: Option<Receiver<SyncMsg>>,
+    output: Output,
+}
+
 impl App {
     /// Constructs a new instance of [`App`].
-    pub fn new(venvs: Vec<Venv>) -> Self {
+    pub fn new(vm: VenvManager) -> Self {
+        let venvs = vm.get_venvs();
+        let uh = Arc::new(RwLock::new(vm));
+
         Self {
             running: true,
+            total_venvs: venvs.len() as u16,
+            venv_sync_progress: 0,
             events: EventHandler::new(),
-            // TODO: constructor should receive the venv_list.
-            // it does not care about how venv_list is created
-            venv_list: VenvList::new(venvs),
+            venv_list: VenvListUi::new(venvs),
+            vm: uh,
             venv_index: 0,
             current_focus: Panel::Venv,
             packages_index: 0,
             output: Output::None,
             show_help: false,
+            syncing: false,
+            maybe_error: None,
+            sync_handle: None,
+            sync_rx: None,
+            current_syncing_venv: "".to_string(),
         }
     }
 
     // Run the application's main loop.
     pub fn run(mut self, mut terminal: DefaultTerminal) -> color_eyre::Result<Output> {
+        // start the sync thread
+        self.start_sync();
+
+        // main app loop
         while self.running {
             terminal.draw(|frame| frame.render_widget(&mut self, frame.area()))?;
             self.handle_events()?;
         }
+
+        // join sync thread on exit
+        if let Some(h) = self.sync_handle.take() {
+            let _ = h.join();
+        }
         Ok(self.output)
     }
+
+    pub fn handle_sync_messages(&mut self) {
+        if let Ok(msg) = self.sync_rx.as_mut().unwrap().try_recv() {
+            match msg {
+                SyncMsg::Started => {}
+                SyncMsg::Progress { venv: _ } => {}
+                SyncMsg::VenvUpdated(venv) => {
+                    self.venv_sync_progress += 1;
+                    self.current_syncing_venv = venv
+                }
+                SyncMsg::Finished => {
+                    self.syncing = false;
+                    // TODO: better error handling here
+                    {
+                        let vm_r = self.vm.read().expect("rwlock poisoned");
+                        vm_r.save_cache().expect("Could not save cache");
+                        let venvs = vm_r.get_venvs();
+                        self.venv_list = VenvListUi::new(venvs);
+                        self.venv_list.list_state.select(Some(self.venv_index));
+                    }
+                    self.update_venv_index();
+                }
+                SyncMsg::Error(err) => self.maybe_error = Some(eyre::eyre!(err)),
+            }
+        }
+    }
+
+    pub fn start_sync(&mut self) {
+        if self.syncing {
+            return;
+        }
+        self.syncing = true;
+
+        let (tx, rx) = mpsc::channel::<SyncMsg>();
+
+        let vm_arc = Arc::clone(&self.vm);
+
+        let handle = VenvManager::threaded_sync(vm_arc, tx.clone());
+        self.sync_handle = Some(handle);
+        self.sync_rx = Some(rx);
+    }
+
+    pub fn sync_after_sync(&mut self) {}
 
     pub fn handle_events(&mut self) -> color_eyre::Result<Output> {
         match self.events.next()? {
@@ -87,18 +169,19 @@ impl App {
                     AppEvent::HalfPageDown => self.select_some_down(),
                     AppEvent::SwitchLeft => self.switch_left(),
                     AppEvent::SwitchRight => self.switch_right(),
+                    AppEvent::UpdateVenvCache => {}
                     AppEvent::SelectVenv => {
-                        let v = self.get_selected_venv_ref();
-                        let venv_path = v.activation_path();
+                        let v = self.get_selected_venv_ui_ref();
+                        let venv_path = v.venv.activation_path();
                         self.output = Output::VenvPath(venv_path);
                         self.quit();
                     }
                     AppEvent::Requirements => {
-                        let v = self.get_selected_venv_ref();
+                        let v = self.get_selected_venv_ui_ref();
                         // TODO: terrible error handling here. fix it. probs show the error message in
                         // the TUI
                         // TODO: confirmation as well
-                        let python = v.requirements();
+                        let python = v.venv.requirements();
                         let output = Command::new(python)
                             .args(["-m", "pip", "freeze"])
                             .output()?;
@@ -149,17 +232,39 @@ impl App {
             KeyCode::Left | KeyCode::Char('h') => self.events.send(AppEvent::SwitchLeft),
             KeyCode::Char('a') => self.events.send(AppEvent::SelectVenv),
             KeyCode::Char('r') => self.events.send(AppEvent::Requirements),
+            KeyCode::Char('u') => self.events.send(AppEvent::UpdateVenvCache),
             // Other handlers you could add here.
             _ => {}
         }
         Ok(())
     }
 
+    // WARN: This is no longer important so I'll deal with this in later versions
+    // pub fn update_venv_cache(&mut self) {
+    //     let selected_venv_path = self.get_selected_venv_ui().venv.path.clone();
+    //     // reloading removes the old value so we have to recalculate everything
+    //     match self.vm.write().unwrap().reload_venv(&selected_venv_path) {
+    //         Ok(_) => {
+    //             let venvs = self.vm.read().unwrap().get_venvs();
+    //             self.venv_list = VenvListUi::new(venvs);
+    //             self.maybe_error = None;
+    //             self.venv_list.list_state.select(Some(self.venv_index));
+    //             self.update_venv_index();
+    //         }
+    //         Err(e) => {
+    //             self.maybe_error = Some(e);
+    //         }
+    //     }
+    // }
+
     /// Handles the tick event of the terminal.
     ///
     /// The tick event is where you can update the state of your application with any logic that
     /// needs to be updated at a fixed frame rate. E.g. polling a server, updating an animation.
-    pub fn tick(&self) {}
+    pub fn tick(&mut self) {
+        // sync message has a loading animation so we update it here
+        self.handle_sync_messages();
+    }
 
     /// Set running to false to quit the application.
     pub fn quit(&mut self) {
@@ -184,14 +289,15 @@ impl App {
             Panel::Packages => {
                 // These are kinda ugly because inner list state would overflow.
                 let max = self
-                    .get_selected_venv_ref()
+                    .get_selected_venv_ui_ref()
+                    .venv
                     .packages
                     .len()
                     .saturating_sub(1);
 
                 let next = self.packages_index.saturating_add(1).min(max);
 
-                let v = self.get_selected_venv_ref();
+                let v = self.get_selected_venv_ui_ref();
                 v.list_state.select(Some(next));
 
                 self.packages_index = next;
@@ -205,7 +311,7 @@ impl App {
                 self.update_venv_index();
             }
             Panel::Packages => {
-                let current_venv = self.get_selected_venv_ref();
+                let current_venv = self.get_selected_venv_ui_ref();
                 current_venv.list_state.select_previous();
                 self.update_package_index();
             }
@@ -218,7 +324,7 @@ impl App {
                 self.update_venv_index();
             }
             Panel::Packages => {
-                let current_venv = self.get_selected_venv_ref();
+                let current_venv = self.get_selected_venv_ui_ref();
                 current_venv.list_state.select_first();
                 self.update_package_index();
             }
@@ -232,12 +338,13 @@ impl App {
             }
             Panel::Packages => {
                 let last_index = self
-                    .get_selected_venv_ref()
+                    .get_selected_venv_ui_ref()
+                    .venv
                     .packages
                     .len()
                     .saturating_sub(1);
 
-                let current_venv = self.get_selected_venv_ref();
+                let current_venv = self.get_selected_venv_ui_ref();
                 current_venv.list_state.select(Some(last_index));
                 self.update_package_index();
             }
@@ -257,13 +364,14 @@ impl App {
             Panel::Packages => {
                 let some_down = std::cmp::min(
                     self.packages_index.saturating_add(5),
-                    self.get_selected_venv_ref()
+                    self.get_selected_venv_ui_ref()
+                        .venv
                         .packages
                         .len()
                         .saturating_sub(1),
                 );
 
-                let current_venv = self.get_selected_venv_ref();
+                let current_venv = self.get_selected_venv_ui_ref();
 
                 current_venv.list_state.select(Some(some_down));
                 self.update_package_index();
@@ -284,12 +392,13 @@ impl App {
             Panel::Packages => {
                 let some_up = std::cmp::min(
                     self.packages_index.saturating_sub(5),
-                    self.get_selected_venv_ref()
+                    self.get_selected_venv_ui_ref()
+                        .venv
                         .packages
                         .len()
                         .saturating_sub(1),
                 );
-                let current_venv = self.get_selected_venv_ref();
+                let current_venv = self.get_selected_venv_ui_ref();
 
                 current_venv.list_state.select(Some(some_up));
                 self.update_package_index();
@@ -308,23 +417,23 @@ impl App {
         }
     }
     pub fn update_package_index(&mut self) {
-        let current_venv = self.get_selected_venv_ref();
+        let current_venv = self.get_selected_venv_ui_ref();
         if let Some(i) = current_venv.list_state.selected() {
-            if i >= current_venv.packages.len() {
-                self.packages_index = current_venv.packages.len().saturating_sub(1);
+            if i >= current_venv.venv.packages.len() {
+                self.packages_index = current_venv.venv.packages.len().saturating_sub(1);
                 return;
             }
             self.packages_index = i;
         }
     }
-    pub fn get_selected_venv(&mut self) -> Venv {
+    pub fn get_selected_venv_ui(&mut self) -> VenvUi {
         self.venv_list.venvs[self.venv_index].clone()
     }
-    pub fn get_selected_venv_ref(&mut self) -> &mut Venv {
+    pub fn get_selected_venv_ui_ref(&mut self) -> &mut VenvUi {
         &mut self.venv_list.venvs[self.venv_index]
     }
     pub fn get_selected_package(&mut self) -> Package {
-        let v = self.get_selected_venv();
+        let v = self.get_selected_venv_ui().venv;
         v.packages[self.packages_index].clone()
     }
 }

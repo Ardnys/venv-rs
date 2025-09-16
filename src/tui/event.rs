@@ -45,6 +45,16 @@ pub enum AppEvent {
     SwitchRight,
     SelectVenv,
     Requirements,
+    UpdateVenvCache,
+}
+
+#[derive(Debug)]
+pub enum SyncMsg {
+    Started,
+    Progress { venv: String },
+    VenvUpdated(String),
+    Finished,
+    Error(String),
 }
 
 /// Terminal event handler.

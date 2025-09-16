@@ -1,21 +1,8 @@
-use std::{borrow::Cow, fs};
+use std::borrow::Cow;
 
-use config::Config;
-use dirs::config_dir;
 use serde::Deserialize;
 
-#[derive(Deserialize)]
-pub struct Settings {
-    pub shell: Shell,
-    pub extra: ExtraFeatures,
-}
-
-#[derive(Deserialize)]
-pub struct ExtraFeatures {
-    pub use_xclip: bool,
-}
-
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Shell {
     ZSH,
@@ -39,6 +26,18 @@ impl Shell {
             Shell::POWERSHELL => format!("{path_str}\\Activate.ps1"),
         }
     }
+    pub fn variants() -> &'static [&'static str] {
+        &[
+            "zsh",
+            "bash",
+            "fish",
+            "csh",
+            "tsch",
+            "pwsh",
+            "cmd",
+            "powershell",
+        ]
+    }
 }
 
 impl TryFrom<String> for Shell {
@@ -58,31 +57,4 @@ impl TryFrom<String> for Shell {
             )),
         }
     }
-}
-
-pub fn get_config() -> Result<Settings, config::ConfigError> {
-    let config_dir = config_dir()
-        .expect("Couldn't get config dir")
-        .join("venv_rs");
-
-    fs::create_dir_all(config_dir.as_path())
-        .expect("Could not create config directories for some reason");
-
-    let settings = Config::builder();
-
-    let settings = if cfg!(target_os = "linux") {
-        settings
-            .set_default("shell", "zsh")?
-            .set_default("extra.use_xclip", true)?
-    } else {
-        settings
-            .set_default("shell", "cmd")?
-            .set_default("extra.use_xclip", false)?
-    };
-
-    let settings = settings
-        .add_source(config::File::from(config_dir.join("config.yaml")).required(false))
-        .build()?;
-
-    settings.try_deserialize::<Settings>()
 }

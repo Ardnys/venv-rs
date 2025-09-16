@@ -3,4 +3,4 @@ pub mod model;
 pub mod parser;
 pub mod utils;
 
-pub use model::{Venv, VenvList};
+pub use model::{Venv, VenvListUi};

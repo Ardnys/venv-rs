@@ -1,250 +1,201 @@
 use std::{
-    collections::HashSet,
-    fs,
-    path::{Path, PathBuf},
+    fs::{self, File},
+    io::{BufRead, BufReader},
+    path::PathBuf,
+    time::SystemTime,
 };
 
+use crate::dir_size::{self, Chonk};
 use color_eyre::{
     eyre::{self, Result, WrapErr},
     owo_colors::OwoColorize,
 };
-use venv_rs::dir_size::{self, Chonk};
 
-use crate::venv::{Venv, model::Package, utils::get_python_dir};
+use crate::venv::{
+    Venv,
+    metadata::{Metadata, MetadataBuilder, MetadataTokens},
+    model::Package,
+    utils::get_python_dir,
+};
 
 use super::utils::{get_packages, package_pairs};
 
-#[derive(Debug)]
-pub enum MetadataTokens {
-    Name(String),
-    Version(String),
-    Summary(String),
-    Dependency(String),
+pub struct VenvParser {
+    dir: PathBuf,
+    cfg: Option<String>,
+    version: Option<String>,
+    pub dist_info_packages: Option<Vec<PathBuf>>,
+    package_dirs: Option<Vec<PathBuf>>,
 }
 
-#[derive(Debug, Clone)]
-pub struct Metadata {
-    pub name: String,
-    pub version: String,
-    pub summary: String,
-    pub dependencies: Option<HashSet<String>>,
-}
-
-#[derive(Default)]
-pub struct MetadataBuilder {
-    pub name: Option<String>,
-    pub version: Option<String>,
-    pub summary: Option<String>,
-    pub dependencies: Option<HashSet<String>>,
-}
-
-impl MetadataBuilder {
-    pub fn new() -> Self {
+impl VenvParser {
+    /// Creates a VenvParser. `dir` must point to a virtual environment.
+    pub fn new(dir: PathBuf) -> Self {
         Self {
-            name: None,
+            dir,
+            cfg: None,
             version: None,
-            summary: None,
-            dependencies: None,
+            dist_info_packages: None,
+            package_dirs: None,
         }
     }
-    pub fn name(&mut self, name: String) -> &mut Self {
-        self.name = Some(name);
-        self
-    }
-    pub fn version(&mut self, version: String) -> &mut Self {
-        self.version = Some(version);
-        self
-    }
-    pub fn summary(&mut self, summary: String) -> &mut Self {
-        self.summary = Some(summary);
-        self
-    }
-    pub fn add_dependencies(&mut self, dependencies: HashSet<String>) -> &mut Self {
-        self.dependencies = Some(dependencies);
-        self
-    }
-    pub fn build(&mut self) -> Metadata {
-        Metadata {
-            name: self.name.clone().unwrap_or_default(),
-            version: self.version.clone().unwrap_or_default(),
-            summary: self.summary.clone().unwrap_or_default(),
-            dependencies: self.dependencies.clone(),
-        }
-    }
-}
 
-impl Metadata {
-    pub fn parse_tokens(tokens: Vec<MetadataTokens>) -> color_eyre::Result<Metadata> {
-        let mut builder = &mut MetadataBuilder::default();
-        let mut dependencies: HashSet<String> = HashSet::new();
-        for tok in tokens {
-            match tok {
-                MetadataTokens::Name(name) => builder = builder.name(name),
-                MetadataTokens::Version(version) => builder = builder.version(version),
-                MetadataTokens::Summary(summary) => builder = builder.summary(summary),
-                MetadataTokens::Dependency(dep) => {
-                    let dep_name = Self::parse_dependency(dep);
-                    let _ = dependencies.insert(dep_name);
-                }
-            }
-        }
-        if !dependencies.is_empty() {
-            builder.add_dependencies(dependencies);
-        }
-        // TODO: don't build yet (cus dependencies)
-        let md = builder.build();
-        Ok(md)
+    /// Convenience function for parsing virtual environments. Use this one unless otherwise.
+    pub fn parse_from_dir(dir: PathBuf) -> Result<Venv> {
+        let dir = dunce::canonicalize(dir)?;
+        VenvParser::new(dir)
+            .read_config()?
+            .parse_version()?
+            .discover_packages()?
+            .parse()
     }
 
-    fn parse_dependency(dep: String) -> String {
-        Self::split_at_separator(dep)
+    /// Reads contents of the `pyvenv.cfg` file
+    fn read_config(mut self) -> Result<Self> {
+        let cfg_path = self.dir.join("pyvenv.cfg");
+        let contents = fs::read_to_string(&cfg_path)?;
+        self.cfg = Some(contents);
+        Ok(self)
     }
 
-    fn split_at_separator(dep: String) -> String {
-        // TODO: to parse extras correct we gotta do it differently
-        //             pytest>=7.3.2; extra == "test"
-        // name -------^     ^ ^    ^ ^     ^  ^
-        // version-sep ------+ |    | |     |  |
-        // version ------------+    | |     |  |
-        // separator ---------------+ |     |  |
-        // extra ---------------------+     |  |
-        // double equals token -------------+  |
-        // extra feature flag -----------------+
-        // so this is gonna be a bit more elaborate
-        let mut split_index = 0;
-        for (i, c) in dep.char_indices() {
-            match c {
-                '>' | '=' | ' ' | '\n' | ';' | '!' | '<' => {
-                    split_index = i;
-                    break;
-                }
-                _ => { /* consume */ }
-            }
-        }
-        if split_index == 0 {
-            split_index = dep.len();
-        }
-
-        dep.split_at(split_index).0.to_string()
-    }
-}
-
-pub fn parse_config_file_contents(contents: String) -> String {
-    contents
-        .lines()
-        .find(|l| l.trim_start().starts_with("version"))
-        .expect("Could not find version in config")
-        .split('=')
-        .nth(1)
-        .map(|v| v.trim().to_string())
-        .unwrap()
-}
-
-pub fn parse_metadata(dist_info_path: PathBuf) -> Result<Metadata> {
-    // TODO: json config file in the future
-    let metadata_path = dist_info_path.join("METADATA");
-    let metadata_contents = fs::read_to_string(&metadata_path)
-        .with_context(|| {
-            format!(
-                "Failed to read metadata file at {}",
-                metadata_path.display()
-            )
-        })?
-        .replace("\r\n", "\n");
-    // WARN: hack above is for linux. needs a cross-platform solution
-
-    let mut header = Vec::new();
-
-    for line in metadata_contents.lines() {
-        if line.trim().is_empty() {
-            break;
-        }
-        header.push(line);
+    /// Finds the python version located in `pyvenv.cfg` file. Use this after calling `read_config`
+    /// first.
+    fn parse_version(mut self) -> Result<Self> {
+        self.version = Some(
+            self.cfg
+                .as_mut()
+                .unwrap()
+                .lines()
+                .find(|l| l.trim_start().starts_with("version"))
+                .expect("Could not find version in config")
+                .split('=')
+                .nth(1)
+                .map(|v| v.trim().to_string())
+                .unwrap(),
+        );
+        Ok(self)
     }
 
-    let tokens: Vec<MetadataTokens> = header
-        .iter()
-        .filter_map(|line| line.split_once(": "))
-        .filter_map(|(key, value)| match key {
-            "Name" => Some(MetadataTokens::Name(value.to_string())),
-            "Version" => Some(MetadataTokens::Version(value.to_string())),
-            "Summary" => Some(MetadataTokens::Summary(value.to_string())),
-            "Requires-Dist" => Some(MetadataTokens::Dependency(value.to_string())),
-            _ => None, // skip unknown keys
-        })
-        .collect();
-
-    let metadata = Metadata::parse_tokens(tokens)?;
-
-    // TODO: return the builder because we are not done with dependencies yet
-    Ok(metadata)
-}
-// expects dir to be a virtual environment
-pub fn parse_from_dir(dir: &Path) -> Result<Venv> {
-    if !dir.is_dir() {
-        Err(eyre::eyre!("{} is not directory.", dir.display()))
-    } else {
-        // println!("Reading dir: {}", dir.to_str().unwrap());
-        let pyvevnv_cfg_file = dir.join("pyvenv.cfg");
-
-        let cfg_contents = fs::read_to_string(&pyvevnv_cfg_file)
-            .with_context(|| format!("Failed to read {}", pyvevnv_cfg_file.display()))?;
-
-        let version = parse_config_file_contents(cfg_contents);
-        // println!("Python version: {version}");
-
-        let is_windows = cfg!(windows);
-
-        let binaries = if is_windows {
-            dir.join("Scripts")
-        } else {
-            dir.join("bin")
-        };
-
-        // println!("Binary directory: {}", binaries.to_str().unwrap());
-
-        let lib_dir = if is_windows {
-            dir.join("Lib")
-        } else {
-            dir.join("lib")
-        };
-
-        let site_packages = if is_windows {
-            lib_dir.join("site-packages")
-        } else {
-            let python_dir = get_python_dir(lib_dir)?.ok_or_else(|| {
-                eyre::eyre!("Could not find python version directory under '/lib'")
-            })?;
-            python_dir.join("site-packages")
-        };
-
-        // println!("{}", site_packages.to_string_lossy());
+    /// Finds packages in the virtual environment
+    pub fn discover_packages(mut self) -> Result<Self> {
+        let site_packages = self.site_packages_path()?;
         let (dist_info_packages, package_dirs) =
             get_packages(site_packages).wrap_err("Could not read 'dist-info' directories")?;
 
         if dist_info_packages.is_empty() {
             return Err(eyre::eyre!("No dist-info packages found in the venv"));
         }
+        self.dist_info_packages = Some(dist_info_packages);
+        self.package_dirs = Some(package_dirs);
+        Ok(self)
+    }
 
-        let pairs = package_pairs(dist_info_packages, package_dirs);
+    /// Gets the most recent modification timestamp among all `.dist-info` directories
+    pub fn recent_dist_info_modification(&self) -> Result<SystemTime> {
+        let dir = self.site_packages_path()?;
+        let mut latest = SystemTime::UNIX_EPOCH;
+
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+
+            // only check `.dist-info` directories
+            if path.extension().and_then(|e| e.to_str()) == Some("dist-info") {
+                // get the metadata from entry itself, which is cheaper
+                let modified = entry.metadata()?.modified()?;
+                if modified > latest {
+                    latest = modified;
+                }
+            }
+        }
+
+        Ok(latest)
+    }
+
+    /// Parses the packages and their info. Both `parse_version` and `discover_packages` must be
+    /// called before calling `parse`.
+    fn parse(self) -> Result<Venv> {
+        let venv_name = self.venv_name();
+        let version = self.version.clone().unwrap();
+        let binaries = self.binaries_path();
+
+        let pairs = package_pairs(self.dist_info_packages.unwrap(), self.package_dirs.unwrap());
         let (packages, num_pkg) =
             parse_package_pairs(pairs).context("Error while parsing pairs")?;
 
         let venv_size = dir_size::ParallelReader
-            .get_dir_size(dir)
+            .get_dir_size(&self.dir)
             .context("Could not get venv size")?;
 
         let v = Venv::new(
-            dir.file_stem().unwrap().to_str().unwrap(),
-            version,
-            venv_size,
-            packages,
-            num_pkg,
-            binaries,
-            dir.to_path_buf(),
+            &venv_name, version, venv_size, packages, num_pkg, binaries, self.dir,
         );
         Ok(v)
     }
+
+    fn venv_name(&self) -> String {
+        let stem = self.dir.file_stem().unwrap();
+        stem.to_str().unwrap().to_string()
+    }
+
+    fn binaries_path(&self) -> PathBuf {
+        if cfg!(windows) {
+            self.dir.join("Scripts")
+        } else {
+            self.dir.join("bin")
+        }
+    }
+
+    fn lib_path(&self) -> PathBuf {
+        if cfg!(windows) {
+            self.dir.join("Lib")
+        } else {
+            self.dir.join("lib")
+        }
+    }
+
+    fn site_packages_path(&self) -> Result<PathBuf> {
+        let lib_dir = self.lib_path();
+        if cfg!(windows) {
+            Ok(lib_dir.join("site-packages"))
+        } else {
+            let python_dir = get_python_dir(lib_dir)?.ok_or_else(|| {
+                eyre::eyre!("Could not find python version directory under '/lib'")
+            })?;
+            Ok(python_dir.join("site-packages"))
+        }
+    }
+}
+
+pub fn parse_metadata(dist_info_path: PathBuf) -> Result<Metadata> {
+    let metadata_path = dist_info_path.join("METADATA");
+    let file = File::open(&metadata_path).with_context(|| {
+        format!(
+            "Failed to open metadata file at {}",
+            metadata_path.display()
+        )
+    })?;
+    let reader = BufReader::new(file);
+
+    let mut tokens = Vec::new();
+
+    for line in reader.lines() {
+        let line = line?;
+        let line = line.trim_end_matches(&['\r', '\n'][..]); // normalize newlines
+
+        if let Some((key, value)) = line.split_once(": ") {
+            match key {
+                "Name" => tokens.push(MetadataTokens::Name(value.to_string())),
+                "Version" => tokens.push(MetadataTokens::Version(value.to_string())),
+                "Summary" => tokens.push(MetadataTokens::Summary(value.to_string())),
+                "Requires-Dist" => tokens.push(MetadataTokens::Dependency(value.to_string())),
+                _ => {}
+            }
+        }
+    }
+
+    let metadata = Metadata::parse_tokens(tokens)?;
+    Ok(metadata)
 }
 
 fn parse_package_pairs(
@@ -272,11 +223,18 @@ fn parse_package_pairs(
             0
         };
 
+        let last_modified = if let Some(d) = dist_info {
+            fs::metadata(d)?.modified()?
+        } else {
+            SystemTime::now()
+        };
+
         let package = Package::new(
             &metadata.name,
             &metadata.version,
             package_size + dist_info_size,
             metadata.clone(),
+            last_modified,
         );
         // println!("pck: {:?}", package);
 
@@ -326,191 +284,13 @@ fn get_package_size(pkg: &Option<PathBuf>) -> u64 {
     }
 }
 
-// fn insert_dependencies(packages: &Vec<Rc<Package>>) {}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::collections::HashSet;
-
-    // Tests for MetadataBuilder
-    #[test]
-    fn test_metadata_builder_new() {
-        let builder = MetadataBuilder::new();
-        assert!(builder.name.is_none());
-        assert!(builder.version.is_none());
-        assert!(builder.summary.is_none());
-        assert!(builder.dependencies.is_none());
-    }
-
-    #[test]
-    fn test_metadata_builder_methods() {
-        let mut builder = MetadataBuilder::new();
-        let mut deps = HashSet::new();
-        deps.insert("numpy".to_string());
-
-        builder
-            .name("opencv-python".to_string())
-            .version("4.12.0.88".to_string())
-            .summary("Wrapper package for OpenCV Python bindings.".to_string())
-            .add_dependencies(deps.clone());
-
-        assert_eq!(builder.name, Some("opencv-python".to_string()));
-        assert_eq!(builder.version, Some("4.12.0.88".to_string()));
-        assert_eq!(
-            builder.summary,
-            Some("Wrapper package for OpenCV Python bindings.".to_string())
-        );
-        assert_eq!(builder.dependencies, Some(deps));
-    }
-
-    #[test]
-    fn test_metadata_builder_build() {
-        let mut builder = MetadataBuilder::new();
-        let mut deps = HashSet::new();
-        deps.insert("numpy".to_string());
-        deps.insert("pillow".to_string());
-        deps.insert("opencv-python".to_string());
-
-        let metadata = builder
-            .name("fimage".to_string())
-            .version("0.2.1".to_string())
-            .summary("A Python module to create and apply filters to images.".to_string())
-            .add_dependencies(deps.clone())
-            .build();
-
-        assert_eq!(metadata.name, "fimage");
-        assert_eq!(metadata.version, "0.2.1");
-        assert_eq!(
-            metadata.summary,
-            "A Python module to create and apply filters to images."
-        );
-        assert_eq!(metadata.dependencies, Some(deps));
-    }
-
-    #[test]
-    fn test_metadata_builder_build_default() {
-        let mut builder = MetadataBuilder::default();
-        let metadata = builder.build();
-        assert_eq!(metadata.name, "");
-        assert_eq!(metadata.version, "");
-        assert_eq!(metadata.summary, "");
-        assert!(metadata.dependencies.is_none());
-    }
-
-    // Tests for Metadata
-    #[test]
-    fn test_split_at_separator() {
-        assert_eq!(
-            Metadata::split_at_separator("requests>=2.25.1".to_string()),
-            "requests"
-        );
-        assert_eq!(
-            Metadata::split_at_separator("opencv-python (>=4.5.5)".to_string()),
-            "opencv-python"
-        );
-        assert_eq!(
-            Metadata::split_at_separator("numpy==1.21.4".to_string()),
-            "numpy"
-        );
-        assert_eq!(
-            Metadata::split_at_separator("pandas < 2.0".to_string()),
-            "pandas"
-        );
-        assert_eq!(
-            Metadata::split_at_separator("scipy!=1.7.0".to_string()),
-            "scipy"
-        );
-        assert_eq!(
-            Metadata::split_at_separator("pytest ; extra == \"test\"".to_string()),
-            "pytest"
-        );
-        assert_eq!(
-            Metadata::split_at_separator("simplejson==3.* ; extra == \"test\"".to_string()),
-            "simplejson"
-        );
-        assert_eq!(
-            Metadata::split_at_separator("pycparser".to_string()),
-            "pycparser"
-        );
-    }
-
-    #[test]
-    fn test_parse_dependency() {
-        assert_eq!(
-            Metadata::parse_dependency("requests>=2.25.1".to_string()),
-            "requests"
-        );
-        assert_eq!(Metadata::parse_dependency("numpy".to_string()), "numpy");
-    }
-
-    #[test]
-    fn test_parse_tokens() {
-        let tokens = vec![
-            MetadataTokens::Name("my-package".to_string()),
-            MetadataTokens::Version("1.2.3".to_string()),
-            MetadataTokens::Summary("This is a test.".to_string()),
-            MetadataTokens::Dependency("requests>=2.0".to_string()),
-            MetadataTokens::Dependency("click".to_string()),
-        ];
-
-        let metadata = Metadata::parse_tokens(tokens).unwrap();
-
-        assert_eq!(metadata.name, "my-package");
-        assert_eq!(metadata.version, "1.2.3");
-        assert_eq!(metadata.summary, "This is a test.");
-
-        let expected_deps: HashSet<String> = ["requests".to_string(), "click".to_string()]
-            .iter()
-            .cloned()
-            .collect();
-        assert_eq!(metadata.dependencies, Some(expected_deps));
-    }
-
-    #[test]
-    fn test_parse_tokens_no_deps() {
-        let tokens = vec![
-            MetadataTokens::Name("simple-package".to_string()),
-            MetadataTokens::Version("0.1.0".to_string()),
-            MetadataTokens::Summary("A simple package.".to_string()),
-        ];
-
-        let metadata = Metadata::parse_tokens(tokens).unwrap();
-
-        assert_eq!(metadata.name, "simple-package");
-        assert_eq!(metadata.version, "0.1.0");
-        assert_eq!(metadata.summary, "A simple package.");
-        assert!(metadata.dependencies.is_none());
-    }
-
-    // Test for parse_config_file_contents
-    #[test]
-    fn test_parse_config_file_contents() {
-        let contents =
-            "home = /usr/bin\ninclude-system-site-packages = false\nversion = 3.11.2\n".to_string();
-        assert_eq!(parse_config_file_contents(contents), "3.11.2");
-
-        let contents_with_whitespace = "  version =  3.13.2 ".to_string();
-        assert_eq!(
-            parse_config_file_contents(contents_with_whitespace),
-            "3.13.2"
-        );
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_parse_config_file_contents_no_version() {
-        let contents = "home = /usr/bin\ninclude-system-site-packages = false\n".to_string();
-        parse_config_file_contents(contents);
-    }
-
-    // NOTE: The following tests depend on file system interactions and are best
-    // implemented using a library like `tempfile` to create temporary directories
-    // and files. The structure of such tests is outlined below.
-
-    use std::fs::File;
     use std::io::Write;
     use tempfile::tempdir;
+
+    use super::*;
+    use std::{collections::HashSet, fs::File};
 
     #[test]
     fn test_parse_metadata() -> Result<()> {
@@ -659,7 +439,7 @@ Dynamic: license-file
         write!(metadata_file, "{pip_metadata}\n\n").unwrap();
 
         // 2. Call parse_from_dir
-        let venv_result = parse_from_dir(venv_dir.path());
+        let venv_result = VenvParser::parse_from_dir(venv_dir.path().to_path_buf());
         assert!(venv_result.is_ok());
         let venv = venv_result.unwrap();
 
@@ -674,5 +454,39 @@ Dynamic: license-file
         assert_eq!(venv.packages[0].version, "25.1.1");
         assert_eq!(venv.binaries, bin_dir);
         assert_eq!(venv.path, venv_dir.path().to_path_buf());
+    }
+
+    #[test]
+    fn test_metadata_builder_build() {
+        let mut builder = MetadataBuilder::new();
+        let mut deps = HashSet::new();
+        deps.insert("numpy".to_string());
+        deps.insert("pillow".to_string());
+        deps.insert("opencv-python".to_string());
+
+        let metadata = builder
+            .name("fimage".to_string())
+            .version("0.2.1".to_string())
+            .summary("A Python module to create and apply filters to images.".to_string())
+            .add_dependencies(deps.clone())
+            .build();
+
+        assert_eq!(metadata.name, "fimage");
+        assert_eq!(metadata.version, "0.2.1");
+        assert_eq!(
+            metadata.summary,
+            "A Python module to create and apply filters to images."
+        );
+        assert_eq!(metadata.dependencies, Some(deps));
+    }
+
+    #[test]
+    fn test_metadata_builder_build_default() {
+        let mut builder = MetadataBuilder::default();
+        let metadata = builder.build();
+        assert_eq!(metadata.name, "");
+        assert_eq!(metadata.version, "");
+        assert_eq!(metadata.summary, "");
+        assert!(metadata.dependencies.is_none());
     }
 }

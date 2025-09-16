@@ -1,6 +1,7 @@
 use std::{fs, io, path::PathBuf};
 
 use color_eyre::Result;
+use walkdir::WalkDir;
 
 pub fn get_python_dir(lib_dir: PathBuf) -> io::Result<Option<PathBuf>> {
     let mut entries = fs::read_dir(lib_dir)?
@@ -82,26 +83,12 @@ pub fn get_packages(site_packages: PathBuf) -> Result<(Vec<PathBuf>, Vec<PathBuf
     Ok((dist_info_dirs, package_dirs))
 }
 
-// my poor function. maybe it worked
-pub fn pair_packages(
-    dist_infos: Vec<PathBuf>,
-    packages: Vec<PathBuf>,
-) -> Vec<(PathBuf, Option<PathBuf>)> {
-    let mut v: Vec<(PathBuf, Option<PathBuf>)> = Vec::with_capacity(packages.len());
-    for p in &packages {
-        let p_filename = p.file_name().unwrap().to_str().unwrap();
-        let di = dist_infos.iter().find(|d| {
-            d.file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .starts_with(p_filename)
-        });
-        // println!("p: {}", p_filename);
-        // println!("di: {:?}", di);
-
-        v.push((p.clone(), di.cloned()));
+pub fn search_venvs(path: PathBuf) -> Vec<PathBuf> {
+    let mut venv_paths = Vec::new();
+    for entry in WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
+        if entry.file_name().to_str().unwrap_or_default() == "pyvenv.cfg" {
+            venv_paths.push(entry.path().parent().unwrap().to_path_buf());
+        }
     }
-
-    v
+    venv_paths
 }
