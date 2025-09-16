@@ -1,3 +1,4 @@
+use crate::dir_size::{Chonk, ParallelReader};
 use chrono::{DateTime, Local};
 use ratatui::{
     buffer::Buffer,
@@ -9,9 +10,8 @@ use ratatui::{
         Scrollbar, ScrollbarOrientation, StatefulWidget, Widget, Wrap,
     },
 };
-use venv_rs::dir_size::{Chonk, ParallelReader};
 
-use crate::app::App;
+use crate::tui::App;
 
 const PANEL_STYLE: Style = Style::new().fg(Color::White);
 const FOCUSED_PANEL_STYLE: Style = Style::new().fg(Color::Green);
@@ -110,7 +110,7 @@ impl App {
             .title(Line::raw("Virtual Environments").centered())
             .borders(Borders::ALL)
             .border_style(match self.current_focus {
-                crate::app::Panel::Venv => FOCUSED_PANEL_STYLE,
+                super::app::Panel::Venv => FOCUSED_PANEL_STYLE,
                 _ => PANEL_STYLE,
             });
 
@@ -152,7 +152,7 @@ impl App {
             .title(Line::raw("Packages").centered())
             .borders(Borders::ALL)
             .border_style(match self.current_focus {
-                crate::app::Panel::Packages => FOCUSED_PANEL_STYLE,
+                super::app::Panel::Packages => FOCUSED_PANEL_STYLE,
                 _ => PANEL_STYLE,
             });
 
@@ -535,8 +535,10 @@ impl App {
         if let Some(rep) = &self.maybe_error {
             let error_message = rep.to_string();
             let error_text = Text::styled(error_message.to_string(), Style::new().on_black().red());
-            let error_paragraph = Paragraph::new(error_text).block(block);
-            error_paragraph.render(area, buf);
+            let error_paragraph = Paragraph::new(error_text)
+                .block(block)
+                .wrap(Wrap { trim: true });
+            error_paragraph.render(popup_area, buf);
         }
     }
 

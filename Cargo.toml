@@ -6,6 +6,20 @@ authors = ["Ardnys <semresavas35@gmail.com>"]
 license = "MIT"
 edition = "2024"
 
+
+[lib]
+name = "venv_rs_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "venv-rs"
+path = "src/main.rs"
+
+# TODO: headless mode isn't ready
+# [[bin]]
+# name = "venv-rs-cli"
+# path = "src/bin/headless.rs"
+
 [dependencies]
 crossterm = "0.28.1"
 ratatui = "0.29.0"

@@ -9,10 +9,11 @@ use std::{
 };
 
 use crate::{
-    event::{AppEvent, Event, EventHandler},
+    core::VenvManager,
+    tui::{AppEvent, Event, EventHandler, SyncMsg},
     venv::{
         VenvListUi,
-        model::{Package, VenvManager, VenvUi},
+        model::{Package, VenvUi},
     },
 };
 use color_eyre::eyre;
@@ -36,15 +37,6 @@ pub enum Output {
     Requirements(String),
     /// nothing
     None,
-}
-
-#[derive(Debug)]
-pub enum SyncMsg {
-    Started,
-    Progress { venv: String },
-    VenvUpdated(String),
-    Finished,
-    Error(String),
 }
 
 /// Application.
@@ -127,10 +119,14 @@ impl App {
                 SyncMsg::Finished => {
                     self.syncing = false;
                     // TODO: better error handling here
-                    let vm_r = self.vm.read().expect("rwlock poisoned");
-                    vm_r.save_cache().expect("Could not save cache");
-                    let venvs = vm_r.get_venvs();
-                    self.venv_list = VenvListUi::new(venvs);
+                    {
+                        let vm_r = self.vm.read().expect("rwlock poisoned");
+                        vm_r.save_cache().expect("Could not save cache");
+                        let venvs = vm_r.get_venvs();
+                        self.venv_list = VenvListUi::new(venvs);
+                        self.venv_list.list_state.select(Some(self.venv_index));
+                    }
+                    self.update_venv_index();
                 }
                 SyncMsg::Error(err) => self.maybe_error = Some(eyre::eyre!(err)),
             }

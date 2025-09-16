@@ -1,22 +1,11 @@
-use activation::activation;
-use app::Output;
 use clap::Parser;
-use commands::{Cli, handle_commands};
-use settings::get_config;
-use venv::model::VenvManager;
-
-use crate::app::App;
-
-pub mod activation;
-pub mod app;
-pub mod clipboard;
-pub mod commands;
-pub mod dir_size;
-pub mod event;
-pub mod settings;
-pub mod ui;
-pub mod venv;
-pub mod venv_search;
+use venv_rs_lib::{
+    commands::{Cli, handle_commands},
+    config::get_config,
+    core::VenvManager,
+    platform::{ShellActivator, WindowsActivation},
+    tui::{App, app::Output},
+};
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
@@ -48,7 +37,15 @@ fn main() -> color_eyre::Result<()> {
 
     let output = result?;
     match output {
-        Output::VenvPath(path_buf) => activation(shell, config, path_buf)?,
+        Output::VenvPath(path_buf) => {
+            #[cfg(windows)]
+            let act = WindowsActivation { shell };
+
+            #[cfg(target_os = "linux")]
+            let act = LinuxActivation { shell, config };
+
+            act.activation_command(&path_buf)?;
+        }
         Output::Requirements(s) => println!("{s}"),
         Output::None => {}
     }

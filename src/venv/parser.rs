@@ -5,11 +5,11 @@ use std::{
     time::SystemTime,
 };
 
+use crate::dir_size::{self, Chonk};
 use color_eyre::{
     eyre::{self, Result, WrapErr},
     owo_colors::OwoColorize,
 };
-use venv_rs::dir_size::{self, Chonk};
 
 use crate::venv::{
     Venv,

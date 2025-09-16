@@ -6,11 +6,8 @@ use color_eyre::{
     owo_colors::OwoColorize,
 };
 
-use crate::{
-    settings::{Settings, Shell},
-    venv::model::VenvManager,
-    venv_search::search_venvs,
-};
+use crate::{config::Settings, core::VenvManager, shell::Shell, venv::utils::search_venvs};
+// use venv_rs_lib::{config::Settings, core::VenvManager, shell::Shell, venv::utils::search_venvs};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about=None)]
