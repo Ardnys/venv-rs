@@ -113,7 +113,7 @@ impl VenvManager {
             {
                 let vm_r = vm_arc.read().expect("rwlock poisoned");
                 if let Err(e) = vm_r.save_cache() {
-                    let _ = sender.send(SyncMsg::Error(format!("Failed to save cache: {}", e)));
+                    let _ = sender.send(SyncMsg::Error(format!("Failed to save cache: {e}")));
                 }
             }
             let _ = sender.send(SyncMsg::Finished);
@@ -208,6 +208,19 @@ impl VenvManager {
     }
 }
 
+fn to_cache_path(venv_path: &Path, cache_dir: &Path) -> Option<PathBuf> {
+    let fname = venv_path
+        .file_name()
+        .expect("Could not get the filename")
+        .to_str()
+        .unwrap();
+
+    let cached_fname = format!("{fname}.bin");
+    let cached_file = cache_dir.join(cached_fname);
+
+    Some(cached_file)
+}
+
 #[cfg(test)]
 mod tests {
     use std::{collections::BTreeMap, fs, path::PathBuf};
@@ -267,17 +280,4 @@ mod tests {
         let res = vm.is_venv_stale(&test_venv_path);
         assert!(!res);
     }
-}
-
-fn to_cache_path(venv_path: &Path, cache_dir: &Path) -> Option<PathBuf> {
-    let fname = venv_path
-        .file_name()
-        .expect("Could not get the filename")
-        .to_str()
-        .unwrap();
-
-    let cached_fname = format!("{fname}.bin");
-    let cached_file = cache_dir.join(cached_fname);
-
-    Some(cached_file)
 }

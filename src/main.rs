@@ -3,7 +3,7 @@ use venv_rs_lib::{
     commands::{Cli, handle_commands},
     config::get_config,
     core::VenvManager,
-    platform::{ShellActivator, WindowsActivation},
+    platform::ShellActivator,
     tui::{App, app::Output},
 };
 
@@ -39,10 +39,10 @@ fn main() -> color_eyre::Result<()> {
     match output {
         Output::VenvPath(path_buf) => {
             #[cfg(windows)]
-            let act = WindowsActivation { shell };
+            let act = venv_rs_lib::platform::WindowsActivation { shell };
 
             #[cfg(target_os = "linux")]
-            let act = LinuxActivation { shell, config };
+            let act = venv_rs_lib::platform::LinuxActivation { shell, config };
 
             act.activation_command(&path_buf)?;
         }

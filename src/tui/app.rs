@@ -169,7 +169,7 @@ impl App {
                     AppEvent::HalfPageDown => self.select_some_down(),
                     AppEvent::SwitchLeft => self.switch_left(),
                     AppEvent::SwitchRight => self.switch_right(),
-                    AppEvent::UpdateVenvCache => todo!(),
+                    AppEvent::UpdateVenvCache => {}
                     AppEvent::SelectVenv => {
                         let v = self.get_selected_venv_ui_ref();
                         let venv_path = v.venv.activation_path();
@@ -239,6 +239,7 @@ impl App {
         Ok(())
     }
 
+    // WARN: This is no longer important so I'll deal with this in later versions
     // pub fn update_venv_cache(&mut self) {
     //     let selected_venv_path = self.get_selected_venv_ui().venv.path.clone();
     //     // reloading removes the old value so we have to recalculate everything

@@ -11,7 +11,7 @@ pub trait ShellActivator {
         let activation_cmd_bold = cmd.bold();
         let highlighted_cmd = activation_cmd_bold.yellow();
 
-        println!("\n{}\n\n {}", banner, highlighted_cmd);
+        println!("\n{banner}\n\n {highlighted_cmd}");
     }
 }
 
@@ -50,9 +50,10 @@ mod act {
 mod act {
     use std::path::Path;
 
-    use color_eyre::eyre::Result;
+    use color_eyre::{eyre::Result, owo_colors::OwoColorize};
 
     use crate::{
+        config::Settings,
         platform::{activation::ShellActivator, copy_to_clipboard},
         shell::Shell,
     };
@@ -65,7 +66,7 @@ mod act {
     // TODO: implement shell activation for linux
     impl ShellActivator for LinuxActivation {
         fn activation_command(&self, path: &Path) -> Result<()> {
-            let activation_command = shell.activation(path_buf.to_string_lossy());
+            let activation_command = self.shell.activation(path.to_string_lossy());
 
             if self.config.extra.use_xclip {
                 self.pretty_print_activation_command(&activation_command);

@@ -227,7 +227,7 @@ impl App {
                 format!("Size: {}", ParallelReader::formatted_size(package.size)),
                 style,
             )),
-            Line::from(Span::styled(format!("Last Modified: {}", fmt_date), style)),
+            Line::from(Span::styled(format!("Last Modified: {fmt_date}"), style)),
             if package.metadata.dependencies.is_some() {
                 Line::from(Span::styled(
                     format!(
@@ -313,7 +313,7 @@ impl App {
                 ),
                 style,
             )),
-            Line::from(Span::styled(format!("Last Modified:  {}", fmt_date), style)),
+            Line::from(Span::styled(format!("Last Modified:  {fmt_date}"), style)),
         ];
 
         let p = Paragraph::new(details)
@@ -555,7 +555,7 @@ impl App {
         let inner_width = area.width.saturating_sub(2) as usize;
 
         // right-side counter string
-        let counter = format!("{}/{}", current, total);
+        let counter = format!("{current}/{total}");
 
         let avail = inner_width.saturating_sub(2 + counter.len());
 
