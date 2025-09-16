@@ -2,18 +2,18 @@
 
 venv-rs is a high level Python virtual environment manager specifically developed for [my personal workflow and needs](https://ardnys.github.io/projects/venv-manager/).
 <div align="center">
-  <img src="https://raw.githubusercontent.com/Ardnys/venv-rs/refs/heads/refactor/images/venv_rs_logo.png" width=300 height=300 />
+  <img src="https://github.com/Ardnys/venv-rs/blob/main/images/venv_rs_logo.png" width=300 height=300 />
 </div>
 
 # Demo
 ## Inspect your virtualenvs directory
-<img src="https://raw.githubusercontent.com/Ardnys/venv-rs/refs/heads/refactor/images/venvs_demo.gif" />
+<img src="https://github.com/Ardnys/venv-rs/blob/main/images/venvs_demo.gif" />
 
 ## Inspect a single virtual environment
-<img src="https://raw.githubusercontent.com/Ardnys/venv-rs/refs/heads/refactor/images/venv_demo.gif" />
+<img src="https://github.com/Ardnys/venv-rs/blob/main/images/venv_demo.gif" />
 
 ## Search for virtual environments
-<img src="https://raw.githubusercontent.com/Ardnys/venv-rs/refs/heads/refactor/images/search_demo.gif" />
+<img src="https://github.com/Ardnys/venv-rs/blob/main/images/search_demo.gif" />
 
 # Features
 - Shows virtual environments, their size on disk, number of packages
