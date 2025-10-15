@@ -41,7 +41,7 @@ fn main() -> color_eyre::Result<()> {
             #[cfg(windows)]
             let act = venv_rs_lib::platform::WindowsActivation { shell };
 
-            #[cfg(target_os = "linux")]
+            #[cfg(not(windows))]
             let act = venv_rs_lib::platform::LinuxActivation { shell, config };
 
             act.activation_command(&path_buf)?;

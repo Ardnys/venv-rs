@@ -41,7 +41,7 @@ pub fn get_config() -> Result<Settings, config::ConfigError> {
 
     let settings = Config::builder().set_default("venvs_dir", Option::<String>::None)?;
 
-    let settings = if cfg!(target_os = "linux") {
+    let settings = if cfg!(not(windows)) {
         settings
             .set_default("shell", "zsh")?
             .set_default("extra.use_xclip", true)?
