@@ -1,4 +1,4 @@
-#[cfg(target_os = "linux")]
+#[cfg(not(windows))]
 mod cpy {
     use std::io::Write;
     use std::process::{Command, Stdio};

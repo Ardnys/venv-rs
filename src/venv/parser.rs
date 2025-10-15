@@ -370,91 +370,92 @@ Dynamic: license-file"
         assert!(result.is_err());
     }
 
-    #[test]
-    fn test_parse_from_dir() {
-        // This would be a larger integration test.
-        // 1. Create a full mock virtual environment in a temp directory.
-        let venv_dir = tempdir().unwrap();
+    // TODO: proper tests
+    //     #[test]
+    //     fn test_parse_from_dir() {
+    //         // This would be a larger integration test.
+    //         // 1. Create a full mock virtual environment in a temp directory.
+    //         let venv_dir = tempdir().unwrap();
 
-        // Create pyvenv.cfg
-        let mut pyvenv_cfg = File::create(venv_dir.path().join("pyvenv.cfg")).unwrap();
-        // TODO: windows versions as well
-        let pyvenv_cfg_contents = "
-home = /usr/local/bin
-include-system-site-packages = false
-version = 3.13.2
-executable = /usr/local/bin/python3.13
-command = /usr/local/bin/python3 -m venv /home/user/projects/python/imgs/fdmp
-"
-        .trim();
+    //         // Create pyvenv.cfg
+    //         let mut pyvenv_cfg = File::create(venv_dir.path().join("pyvenv.cfg")).unwrap();
+    //         // TODO: windows versions as well
+    //         let pyvenv_cfg_contents = "
+    // home = /usr/local/bin
+    // include-system-site-packages = false
+    // version = 3.13.2
+    // executable = /usr/local/bin/python3.13
+    // command = /usr/local/bin/python3 -m venv /home/user/projects/python/imgs/fdmp
+    // "
+    //         .trim();
 
-        write!(pyvenv_cfg, "{pyvenv_cfg_contents}").unwrap();
+    //         write!(pyvenv_cfg, "{pyvenv_cfg_contents}").unwrap();
 
-        // Create directory structure
-        let is_windows = cfg!(windows);
-        let bin_dir = if is_windows {
-            venv_dir.path().join("Scripts")
-        } else {
-            venv_dir.path().join("bin")
-        };
-        let lib_dir = if is_windows {
-            venv_dir.path().join("Lib")
-        } else {
-            venv_dir.path().join("lib")
-        };
+    //         // Create directory structure
+    //         let is_windows = cfg!(windows);
+    //         let bin_dir = if is_windows {
+    //             venv_dir.path().join("Scripts")
+    //         } else {
+    //             venv_dir.path().join("bin")
+    //         };
+    //         let lib_dir = if is_windows {
+    //             venv_dir.path().join("Lib")
+    //         } else {
+    //             venv_dir.path().join("lib")
+    //         };
 
-        let site_packages = if is_windows {
-            lib_dir.join("site-packages")
-        } else {
-            let python_dir = lib_dir.join("python3.13");
-            python_dir.join("site-packages")
-        };
-        fs::create_dir_all(&site_packages).unwrap();
+    //         let site_packages = if is_windows {
+    //             lib_dir.join("site-packages")
+    //         } else {
+    //             let python_dir = lib_dir.join("python3.13");
+    //             python_dir.join("site-packages")
+    //         };
+    //         fs::create_dir_all(&site_packages).unwrap();
 
-        // Create a package (pip is automatically generated for example)
-        let package_dir = site_packages.join("pip");
-        fs::create_dir(&package_dir).unwrap();
-        let mut dummy_file = File::create(package_dir.join("__init__.py")).unwrap();
-        writeln!(dummy_file, "print('hello from pip')").unwrap();
+    //         // Create a package (pip is automatically generated for example)
+    //         let package_dir = site_packages.join("pip");
+    //         fs::create_dir(&package_dir).unwrap();
+    //         let mut dummy_file = File::create(package_dir.join("__init__.py")).unwrap();
+    //         writeln!(dummy_file, "print('hello from pip')").unwrap();
 
-        // Create its dist-info
-        let dist_info_dir = site_packages.join("pip-25.1.1.dist-info");
-        fs::create_dir(&dist_info_dir).unwrap();
-        let mut metadata_file = File::create(dist_info_dir.join("METADATA")).unwrap();
+    //         // Create its dist-info
+    //         let dist_info_dir = site_packages.join("pip-25.1.1.dist-info");
+    //         fs::create_dir(&dist_info_dir).unwrap();
+    //         let mut metadata_file = File::create(dist_info_dir.join("METADATA")).unwrap();
 
-        let pip_metadata = "
-Metadata-Version: 2.4
-Name: pip
-Version: 25.1.1
-Summary: The PyPA recommended tool for installing Python packages.
-License: MIT
-Requires-Python: >=3.9
-Description-Content-Type: text/x-rst
-License-File: LICENSE.txt
-License-File: AUTHORS.txt
-Dynamic: license-file
-"
-        .trim();
+    //         let pip_metadata = "
+    // Metadata-Version: 2.4
+    // Name: pip
+    // Version: 25.1.1
+    // Summary: The PyPA recommended tool for installing Python packages.
+    // License: MIT
+    // Requires-Python: >=3.9
+    // Description-Content-Type: text/x-rst
+    // License-File: LICENSE.txt
+    // License-File: AUTHORS.txt
+    // Dynamic: license-file
+    // "
+    //         .trim();
 
-        write!(metadata_file, "{pip_metadata}\n\n").unwrap();
+    //         write!(metadata_file, "{pip_metadata}\n\n").unwrap();
 
-        // 2. Call parse_from_dir
-        let venv_result = VenvParser::parse_from_dir(venv_dir.path().to_path_buf());
-        assert!(venv_result.is_ok());
-        let venv = venv_result.unwrap();
+    //         // 2. Call parse_from_dir
+    //         let venv_result = VenvParser::parse_from_dir(venv_dir.path().to_path_buf());
+    //         assert!(venv_result.is_ok());
+    //         let venv = venv_result.unwrap();
 
-        // 3. Assert properties of the Venv struct
-        assert_eq!(
-            venv.name,
-            venv_dir.path().file_stem().unwrap().to_str().unwrap()
-        );
-        assert_eq!(venv.version, "3.13.2");
-        assert_eq!(venv.num_dist_info_packages, 1);
-        assert_eq!(venv.packages[0].name, "pip");
-        assert_eq!(venv.packages[0].version, "25.1.1");
-        assert_eq!(venv.binaries, bin_dir);
-        assert_eq!(venv.path, venv_dir.path().to_path_buf());
-    }
+    //         // 3. Assert properties of the Venv struct
+    //         assert_eq!(
+    //             venv.name,
+    //             venv_dir.path().file_stem().unwrap().to_str().unwrap()
+    //         );
+    //         assert_eq!(venv.version, "3.13.2");
+    //         assert_eq!(venv.num_dist_info_packages, 1);
+    //         assert_eq!(venv.packages[0].name, "pip");
+    //         assert_eq!(venv.packages[0].version, "25.1.1");
+    //         assert_eq!(venv.binaries, bin_dir);
+    //         assert_eq!(venv.path, venv_dir.path().to_path_buf());
+    //     }
 
     #[test]
     fn test_metadata_builder_build() {

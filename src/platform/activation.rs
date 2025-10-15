@@ -46,7 +46,7 @@ mod act {
     }
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(not(windows))]
 mod act {
     use std::path::Path;
 

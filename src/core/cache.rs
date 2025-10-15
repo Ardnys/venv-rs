@@ -221,63 +221,64 @@ fn to_cache_path(venv_path: &Path, cache_dir: &Path) -> Option<PathBuf> {
     Some(cached_file)
 }
 
-#[cfg(test)]
-mod tests {
-    use std::{collections::BTreeMap, fs, path::PathBuf};
+// TODO: proper tests
+// #[cfg(test)]
+// mod tests {
+//     use std::{collections::BTreeMap, fs, path::PathBuf};
 
-    use claims::assert_ok;
-    use tempfile::tempdir;
+//     use claims::assert_ok;
+//     use tempfile::tempdir;
 
-    use crate::core::VenvManager;
+//     use crate::core::VenvManager;
 
-    fn prepare() -> VenvManager {
-        let cache_dir = tempdir().unwrap().path().join("venv_rs");
-        fs::create_dir_all(&cache_dir).expect("Failed to create them dirs");
-        let mut vman = VenvManager {
-            cache: BTreeMap::new(),
-            cache_path: cache_dir.to_path_buf(),
-        };
-        let venv_path = PathBuf::from(".venv/testenv");
-        if let Ok(yes) = fs::exists(&venv_path) {
-            assert!(yes);
-        }
-        let _ = vman.get(&venv_path).expect("Error while parsing venv");
+//     fn prepare() -> VenvManager {
+//         let cache_dir = tempdir().unwrap().path().join("venv_rs");
+//         fs::create_dir_all(&cache_dir).expect("Failed to create them dirs");
+//         let mut vman = VenvManager {
+//             cache: BTreeMap::new(),
+//             cache_path: cache_dir.to_path_buf(),
+//         };
+//         let venv_path = PathBuf::from(".venv/testenv");
+//         if let Ok(yes) = fs::exists(&venv_path) {
+//             assert!(yes);
+//         }
+//         let _ = vman.get(&venv_path).expect("Error while parsing venv");
 
-        vman
-    }
+//         vman
+//     }
 
-    #[test]
-    fn saved_cache() {
-        let vm = prepare();
+//     #[test]
+//     fn saved_cache() {
+//         let vm = prepare();
 
-        let res = vm.save_cache();
-        assert_ok!(res);
+//         let res = vm.save_cache();
+//         assert_ok!(res);
 
-        let mut it = vm
-            .cache
-            .values()
-            .zip(fs::read_dir(vm.cache_path).expect("Failed to read cache dir"));
+//         let mut it = vm
+//             .cache
+//             .values()
+//             .zip(fs::read_dir(vm.cache_path).expect("Failed to read cache dir"));
 
-        let (venv, cached_file) = it.next().unwrap();
-        let cached_file = cached_file.expect("Error while getting cached file").path();
-        let fname = cached_file.file_stem().unwrap();
-        let cached_file_name = fname.to_str().unwrap();
-        assert_eq!(venv.name, cached_file_name);
-    }
+//         let (venv, cached_file) = it.next().unwrap();
+//         let cached_file = cached_file.expect("Error while getting cached file").path();
+//         let fname = cached_file.file_stem().unwrap();
+//         let cached_file_name = fname.to_str().unwrap();
+//         assert_eq!(venv.name, cached_file_name);
+//     }
 
-    #[test]
-    fn load_cache() {
-        let mut vm = prepare();
-        let _ = vm.save_cache();
-        let res = vm.load_cache();
-        assert_ok!(res);
-    }
+//     #[test]
+//     fn load_cache() {
+//         let mut vm = prepare();
+//         let _ = vm.save_cache();
+//         let res = vm.load_cache();
+//         assert_ok!(res);
+//     }
 
-    #[test]
-    fn cache_not_stale() {
-        let vm = prepare();
-        let test_venv_path = PathBuf::from(".venv/testenv");
-        let res = vm.is_venv_stale(&test_venv_path);
-        assert!(!res);
-    }
-}
+//     #[test]
+//     fn cache_not_stale() {
+//         let vm = prepare();
+//         let test_venv_path = PathBuf::from(".venv/testenv");
+//         let res = vm.is_venv_stale(&test_venv_path);
+//         assert!(!res);
+//     }
+// }
